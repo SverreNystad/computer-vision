@@ -1,0 +1,4 @@
+data/images/*
+data/labels/*
+*.pt
+runs/*
