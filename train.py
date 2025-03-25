@@ -32,7 +32,7 @@ def objective(trial: optuna.Trial) -> float:
         )
 
     metrics = model.val()
-    precision, recall, mAP50, mAP50_95, fitness = metrics.results_dict.vaules()
+    precision, recall, mAP50, mAP50_95, fitness = metrics.results_dict.values()
     
     # results_dict: {'metrics/precision(B)': np.float64(0.21608179959939197), 
     # 'metrics/recall(B)': np.float64(0.10619469026548672), 
