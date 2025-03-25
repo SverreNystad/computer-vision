@@ -1,69 +1,109 @@
-from ultralytics import YOLO
-import torch
-from torchvision.transforms import v2
-import optuna
-
-import optunahub
-from optuna.study import StudyDirection
-from optuna_dashboard import run_server
 import logging
 import sys
+import optuna
+from optuna.study import StudyDirection
+from optuna_dashboard import run_server
+from ultralytics import YOLO
+from codecarbon import track_emissions
+import wandb
 
+# Initialize your Weights & Biases environment
+wandb.login(key="425f1ece127aada41b899f77e890aea503937260")
 
-def objective(trial: optuna.Trial) -> float:
+def objective(trial: optuna.Trial):
+    # -- Example of hyperparameter suggestions (expand as you like) --
 
+    # Basic parameters
+    epochs = trial.suggest_int("epochs", 1, 10)
 
-    epochs = trial.suggest_int("epochs", 1, 3_000)
+    # From the YOLO default search space
+    lr0 = trial.suggest_float("lr0", 1e-5, 1e-1, log=True)
+    lrf = trial.suggest_float("lrf", 0.01, 1.0)
+    momentum = trial.suggest_float("momentum", 0.6, 0.98)
+    weight_decay = trial.suggest_float("weight_decay", 0.0, 0.001)
+    warmup_epochs = trial.suggest_float("warmup_epochs", 0.0, 5.0)
+    warmup_momentum = trial.suggest_float("warmup_momentum", 0.0, 0.95)
+    box = trial.suggest_float("box", 0.02, 0.2)
+    cls = trial.suggest_float("cls", 0.2, 4.0)
+    hsv_h = trial.suggest_float("hsv_h", 0.0, 0.1)
+    hsv_s = trial.suggest_float("hsv_s", 0.0, 0.9)
+    hsv_v = trial.suggest_float("hsv_v", 0.0, 0.9)
+    degrees = trial.suggest_float("degrees", 0.0, 45.0)
+    translate = trial.suggest_float("translate", 0.0, 0.9)
+    scale = trial.suggest_float("scale", 0.0, 0.9)
+    shear = trial.suggest_float("shear", 0.0, 10.0)
+    perspective = trial.suggest_float("perspective", 0.0, 0.001)
+    flipud = trial.suggest_float("flipud", 0.0, 1.0)
+    fliplr = trial.suggest_float("fliplr", 0.0, 1.0)
+    mosaic = trial.suggest_float("mosaic", 0.0, 1.0)
+    mixup = trial.suggest_float("mixup", 0.0, 1.0)
+    copy_paste = trial.suggest_float("copy_paste", 0.0, 1.0)
 
-
+    # Initialize model
     model = YOLO("yolo11n.yaml")
+
+    # Train model with the sampled hyperparameters
     model.train(
         data="/work/sverrnys/computer-vision/data/data.yaml",
+        project="cv-rgb",
         epochs=epochs,
-        # degrees=0.25,    # rotation in degrees (+/-)
-        # translate=0.1,   # translation fraction
-        # scale=0.3,       # scaling factor gain
-        # shear=0.0,       # shear (set to 0.0 to disable)
-        # # flipud=0.0,      # probability for vertical flip
-        # fliplr=0.5,      # probability for horizontal flip
-        # mosaic=1.0,      # mosaic augmentation (combines 4 images)
-        # mixup=0.0,       # mixup augmentation probability (set to 0 to disable)
-        # copy_paste=0.0   # copy-paste augmentation probability
-        )
+        lr0=lr0,
+        lrf=lrf,
+        momentum=momentum,
+        weight_decay=weight_decay,
+        warmup_epochs=warmup_epochs,
+        warmup_momentum=warmup_momentum,
+        box=box,
+        cls=cls,
+        hsv_h=hsv_h,
+        hsv_s=hsv_s,
+        hsv_v=hsv_v,
+        degrees=degrees,
+        translate=translate,
+        scale=scale,
+        shear=shear,
+        perspective=perspective,
+        flipud=flipud,
+        fliplr=fliplr,
+        mosaic=mosaic,
+        mixup=mixup,
+        copy_paste=copy_paste,
+    )
 
+    # Validate and retrieve metrics
     metrics = model.val()
     precision, recall, mAP50, mAP50_95, fitness = metrics.results_dict.values()
-    
-    # results_dict: {'metrics/precision(B)': np.float64(0.21608179959939197), 
-    # 'metrics/recall(B)': np.float64(0.10619469026548672), 
-    # 'metrics/mAP50(B)': np.float64(0.04932460480212709), 
-    # 'metrics/mAP50-95(B)': np.float64(0.00941862329112571), 
-    # 'fitness': np.float64(0.013409221442225849)}
 
     return precision, recall, mAP50, mAP50_95, fitness
-    
 
-if __name__ == "__main__":
+
+@track_emissions(offline=True, country_iso_code="NOR")
+def main(study_name: str):
     optuna.logging.get_logger("optuna").addHandler(logging.StreamHandler(sys.stdout))
-    study_name = "yolo_epochs" 
-    storage_name = f"sqlite:///{study_name}.db"
-    directions = [
-        StudyDirection.MAXIMIZE, 
-        StudyDirection.MAXIMIZE, 
-        StudyDirection.MAXIMIZE, 
-        StudyDirection.MAXIMIZE, 
-        StudyDirection.MAXIMIZE, 
-        ]
 
+    storage_name = f"sqlite:///{study_name}.db"
+
+    directions = [
+        StudyDirection.MAXIMIZE,  # precision
+        StudyDirection.MAXIMIZE,  # recall
+        StudyDirection.MAXIMIZE,  # mAP50
+        StudyDirection.MAXIMIZE,  # mAP50-95
+        StudyDirection.MAXIMIZE,  # fitness
+    ]
 
     study = optuna.create_study(
         study_name=study_name,
         storage=storage_name,
-        load_if_exists= True,
-        directions=directions
-        )
+        load_if_exists=True,
+        directions=directions,
+    )
 
-
+    # Run your study (e.g. 10 iterations)
     for _ in range(10):
-         study.optimize(objective, n_trials=1)
-    run_server(storage_name)
+        study.optimize(objective, n_trials=10)
+
+
+if __name__ == "__main__":
+   study_name = "lidar_yolo_epochs"
+   main(study_name)
+   run_server(study_name)
