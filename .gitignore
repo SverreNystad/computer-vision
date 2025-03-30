@@ -1,7 +1,12 @@
 data/images/*
 data/labels/*
+data/rgb/*
+data/lidar/*
 *.pt
 runs/*
+*.db
+cv-rgb/*
+cv-lidar/*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

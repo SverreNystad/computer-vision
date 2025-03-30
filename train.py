@@ -1,3 +1,17 @@
+import os
+import getpass
+
+USER_NAME = getpass.getuser()
+
+os.environ["WANDB_DIR"] = f"/work/{USER_NAME}/"
+os.environ["WANDB_CACHE_DIR"] = f"/work/{USER_NAME}/.cache/"
+os.environ["WANDB_CONFIG_DIR"] = f"/work/{USER_NAME}/.config/wandb"
+os.environ["WANDB_DATA_DIR"] = f"/work/{USER_NAME}/.cache/wandb-data/"
+os.environ["WANDB_ARTIFACT_DIR"] = f"/work/{USER_NAME}/artifacts"
+
+if not os.path.exists(os.getenv("WANDB_CONFIG_DIR")):
+    os.makedirs(os.getenv("WANDB_CONFIG_DIR"))
+
 import logging
 import sys
 import optuna
@@ -9,6 +23,8 @@ import wandb
 
 # Initialize your Weights & Biases environment
 wandb.login(key="425f1ece127aada41b899f77e890aea503937260")
+
+print(os.getenv("WANDB_DIR"))
 
 def objective(trial: optuna.Trial):
     # -- Example of hyperparameter suggestions (expand as you like) --
@@ -44,7 +60,7 @@ def objective(trial: optuna.Trial):
 
     # Train model with the sampled hyperparameters
     model.train(
-        data="/work/sverrnys/computer-vision/data/data.yaml",
+        data=f"/work/{USER_NAME}/computer-vision/data/data.yaml",
         project="cv-rgb",
         epochs=epochs,
         lr0=lr0,

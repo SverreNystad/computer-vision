@@ -1,6 +1,6 @@
-train: ./images/train
-val: ./images/valid
-test: ./images/test
+train: ./rgb/images/train
+val: ./rgb/images/valid
+test: ./rgb/images/test
 
 nc: 1
 names: 
