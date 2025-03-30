@@ -20,9 +20,18 @@ from optuna_dashboard import run_server
 from ultralytics import YOLO
 from codecarbon import track_emissions
 import wandb
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
+
+
+WANDB_API_KEY = os.getenv("WANDB_API_KEY")
 
 # Initialize your Weights & Biases environment
-wandb.login(key="425f1ece127aada41b899f77e890aea503937260")
+wandb.login(key=WANDB_API_KEY)
+
+# Initialize your Weights & Biases environment
 
 print(os.getenv("WANDB_DIR"))
 
@@ -97,7 +106,14 @@ def objective(trial: optuna.Trial):
 def main(study_name: str):
     optuna.logging.get_logger("optuna").addHandler(logging.StreamHandler(sys.stdout))
 
-    storage_name = f"sqlite:///{study_name}.db"
+    POSTGRES_USER = os.getenv("POSTGRES_USER")
+    POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD")
+    print(POSTGRES_USER)
+    print(POSTGRES_PASSWORD)
+    storage_name = f"postgresql://{POSTGRES_USER}:{POSTGRES_PASSWORD}@10.22.130.139:5432/computer_vision_db"
+    #storage_name = f"postgresql://{POSTGRES_USER}:{POSTGRES_PASSWORD}@optuna.techtaitans.com:5432/computer_vision_db"
+
+
 
     directions = [
         StudyDirection.MAXIMIZE,  # precision
