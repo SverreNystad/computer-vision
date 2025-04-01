@@ -1,0 +1,7 @@
+train: ./lidar/images/train
+val: ./lidar/images/valid
+test: ./lidar/images/test
+
+nc: 1
+names:
+  0: pole
