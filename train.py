@@ -18,7 +18,7 @@ import optuna
 from optuna.study import StudyDirection
 from optuna_dashboard import run_server
 from ultralytics import YOLO
-from codecarbon import track_emissions
+from codecarbon import track_emissions, OfflineEmissionsTracker
 import wandb
 from dotenv import load_dotenv
 import os
@@ -104,28 +104,34 @@ def objective(trial: optuna.Trial):
 
 @track_emissions(offline=True, country_iso_code="NOR")
 def main(study_name: str):
-    optuna.logging.get_logger("optuna").addHandler(logging.StreamHandler(sys.stdout))
+    tracker = OfflineEmissionsTracker(country_iso_code="NOR")
+    try:
+        tracker.start()
+        optuna.logging.get_logger("optuna").addHandler(logging.StreamHandler(sys.stdout))
 
-    storage_name = f"mysql+pymysql://root:CVisCOOL@127.0.0.1:3307/optuna_db"
+        storage_name = f"mysql+pymysql://root:CVisCOOL@127.0.0.1:3307/optuna_db"
 
-    directions = [
-        StudyDirection.MAXIMIZE,  # precision
-        StudyDirection.MAXIMIZE,  # recall
-        StudyDirection.MAXIMIZE,  # mAP50
-        StudyDirection.MAXIMIZE,  # mAP50-95
-        StudyDirection.MAXIMIZE,  # fitness
-    ]
+        directions = [
+            StudyDirection.MAXIMIZE,  # precision
+            StudyDirection.MAXIMIZE,  # recall
+            StudyDirection.MAXIMIZE,  # mAP50
+            StudyDirection.MAXIMIZE,  # mAP50-95
+            StudyDirection.MAXIMIZE,  # fitness
+        ]
 
-    study = optuna.create_study(
-        study_name=study_name,
-        storage=storage_name,
-        load_if_exists=True,
-        directions=directions,
-    )
+        study = optuna.create_study(
+            study_name=study_name,
+            storage=storage_name,
+            load_if_exists=True,
+            directions=directions,
+        )
 
-    # Run your study (e.g. 10 iterations)
-    for _ in range(100):
-        study.optimize(objective, n_trials=10)
+        # Run your study (e.g. 10 iterations)
+        for _ in range(100):
+            study.optimize(objective, n_trials=10)
+            tracker.flush()
+    finally:
+        emmisions = tracker.stop()
 
 
 if __name__ == "__main__":
