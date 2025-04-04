@@ -18,7 +18,7 @@ import optuna
 from optuna.study import StudyDirection
 from optuna_dashboard import run_server
 from ultralytics import YOLO
-from codecarbon import track_emissions
+from codecarbon import track_emissions, OfflineEmmisionsTracker
 import wandb
 from dotenv import load_dotenv
 import os
@@ -97,30 +97,36 @@ def objective(trial: optuna.Trial):
 
 @track_emissions(offline=True, country_iso_code="NOR")
 def main(study_name: str):
-    optuna.logging.get_logger("optuna").addHandler(logging.StreamHandler(sys.stdout))
+    tracker = OfflineEmissionsTracker(country_iso_code="NOR")
+    try:
+        tracker.start()
+        optuna.logging.get_logger("optuna").addHandler(logging.StreamHandler(sys.stdout))
 
-    study_name = "csv-combined-small"
-    storage_name = f"sqlite:///{study_name}.db"
+        study_name = "csv-combined-small"
+        storage_name = f"sqlite:///{study_name}.db"
 
 
-    directions = [
-        StudyDirection.MAXIMIZE,  # precision
-        StudyDirection.MAXIMIZE,  # recall
-        StudyDirection.MAXIMIZE,  # mAP50
-        StudyDirection.MAXIMIZE,  # mAP50-95
-        StudyDirection.MAXIMIZE,  # fitness
-    ]
+        directions = [
+            StudyDirection.MAXIMIZE,  # precision
+            StudyDirection.MAXIMIZE,  # recall
+            StudyDirection.MAXIMIZE,  # mAP50
+            StudyDirection.MAXIMIZE,  # mAP50-95
+            StudyDirection.MAXIMIZE,  # fitness
+        ]
 
-    study = optuna.create_study(
-        study_name=study_name,
-        storage=storage_name,
-        load_if_exists=True,
-        directions=directions,
-    )
+        study = optuna.create_study(
+            study_name=study_name,
+            storage=storage_name,
+            load_if_exists=True,
+            directions=directions,
+        )
 
-    # Run your study
-    for _ in range(10):
-        study.optimize(objective, n_trials=10)
+        # Run your study
+        for _ in range(10):
+            study.optimize(objective, n_trials=10)
+            tracker.flush()
+    finally:
+        tracker.stop()
 
 
 if __name__ == "__main__":
