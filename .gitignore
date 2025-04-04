@@ -7,6 +7,7 @@ runs/*
 *.db
 cv-rgb/*
 cv-lidar/*
+cv-rgb-small/*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

@@ -65,12 +65,12 @@ def objective(trial: optuna.Trial):
     copy_paste = trial.suggest_float("copy_paste", 0.0, 1.0)
 
     # Initialize model
-    model = YOLO("yolo11n.yaml")
+    model = YOLO("yolo11s.yaml")
 
     # Train model with the sampled hyperparameters
     model.train(
         data=f"/work/{USER_NAME}/computer-vision/data/data.yaml",
-        project="cv-rgb",
+        project="cv-rgb-small",
         epochs=epochs,
         lr0=lr0,
         lrf=lrf,
