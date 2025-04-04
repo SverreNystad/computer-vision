@@ -18,7 +18,7 @@ import optuna
 from optuna.study import StudyDirection
 from optuna_dashboard import run_server
 from ultralytics import YOLO
-from codecarbon import track_emissions, OfflineEmmisionsTracker
+from codecarbon import track_emissions, OfflineEmissionsTracker
 import wandb
 from dotenv import load_dotenv
 import os
