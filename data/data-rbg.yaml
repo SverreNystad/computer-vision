@@ -3,5 +3,5 @@ val: ./rgb/images/valid
 test: ./rgb/images/test
 
 nc: 1
-names: 
+names:
   0: pole

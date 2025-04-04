@@ -27,16 +27,11 @@ load_dotenv()
 
 
 WANDB_API_KEY = os.getenv("WANDB_API_KEY")
-
+print(f"WANDB_API_KEY: {WANDB_API_KEY}")
 # Initialize your Weights & Biases environment
 wandb.login(key=WANDB_API_KEY)
 
-# Initialize your Weights & Biases environment
-
-print(os.getenv("WANDB_DIR"))
-
 def objective(trial: optuna.Trial):
-    # -- Example of hyperparameter suggestions (expand as you like) --
 
     # Basic parameters
     epochs = trial.suggest_int("epochs", 1, 3000)
@@ -132,7 +127,6 @@ def main(study_name: str):
             tracker.flush()
     finally:
         emmisions = tracker.stop()
-
 
 if __name__ == "__main__":
    study_name = "lidar_yolo_epochs"

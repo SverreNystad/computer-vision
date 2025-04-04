@@ -1,0 +1,7 @@
+train: ./combined/images/train
+val: ./combined/images/valid
+test: ./combined/images/test
+
+nc: 1
+names:
+  0: pole
