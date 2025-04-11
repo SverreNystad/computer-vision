@@ -4,14 +4,13 @@
 #SBATCH --time=3-00:25:00
 #SBATCH --partition=GPUQ
 #SBATCH --gres=gpu:1
-#SBATCH --mem=32G
+#SBATCH --mem=32GB
 #SBATCH --nodes=4
-#SBATCH --constraint="(p100|v100|a100|h100)&(gpu16g|gpu32|gpu40|gpu80g)"
+#SBATCH --constraint="(p100|v100|a100|h100)&(gpu16g|gpu32g|gpu40g|gpu80g)"
 #SBATCH --output=output_combined.txt
 #SBATCH --error=output_combined.err
 #SBATCH --mail-user=sverrnys@ntnu.no
 #SBATCH --mail-type=ALL
-#SBATCH --cpus-per-task=4
 
 
 WORKDIR=${SLURM_SUBMIT_DIR}
@@ -20,6 +19,8 @@ echo "Running from this directory: $SLURM_SUBMIT_DIR"
 echo "Name of job: $SLURM_JOB_NAME"
 echo "ID of job: $SLURM_JOB_ID"
 echo "The job was run on these nodes: $SLURM_JOB_NODELIST"
+
+ENV_PATH="/cluster/work/sverrnys/computer-vision/cv-env/"
 
 module purge
 module load Anaconda3/2024.02-1
