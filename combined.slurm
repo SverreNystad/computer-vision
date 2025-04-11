@@ -7,8 +7,8 @@
 #SBATCH --mem=32GB
 #SBATCH --nodes=4
 #SBATCH --constraint="(v100|a100|h100)&(gpu32g|gpu40g|gpu80g)"
-#SBATCH --output=output_combined.txt
-#SBATCH --error=output_combined.err
+#SBATCH --output=slurm_outputs/output_combined.txt
+#SBATCH --error=slurm_outputs/output_combined.err
 #SBATCH --mail-user=sverrnys@ntnu.no
 #SBATCH --mail-type=ALL
 
