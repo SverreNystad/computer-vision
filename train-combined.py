@@ -84,8 +84,10 @@ def objective(trial: optuna.Trial):
     # Validate and retrieve metrics
     metrics = model.val()
     precision, recall, mAP50, mAP50_95, fitness = metrics.results_dict.values()
-
-    return precision, recall, mAP50, mAP50_95, fitness
+    wandb.log({
+        "precision": precision, "recall": recall, "mAP50": mAP50, "mAP50_95": mAP50_95, "fitness": fitness
+    })
+    return mAP50_95
 
 
 @track_emissions(offline=True, country_iso_code="NOR")
@@ -97,7 +99,7 @@ def main(study_name: str):
         wandb_kwargs = {"project": "cv-combined-small"}
         wandbc = WeightsAndBiasesCallback(wandb_kwargs=wandb_kwargs, as_multirun=True)
 
-        study_name = "csv-combined-small"
+        study_name = "cv-combined-small"
         MYSQL_USER = os.getenv("MYSQL_USER")
         MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD")
 
@@ -105,10 +107,6 @@ def main(study_name: str):
 
         directions = [
             StudyDirection.MAXIMIZE,  # precision
-            StudyDirection.MAXIMIZE,  # recall
-            StudyDirection.MAXIMIZE,  # mAP50
-            StudyDirection.MAXIMIZE,  # mAP50-95
-            StudyDirection.MAXIMIZE,  # fitness
         ]
 
         study = optuna.create_study(
