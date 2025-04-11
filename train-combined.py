@@ -1,30 +1,30 @@
 import os
 import getpass
-
-USER_NAME = getpass.getuser()
-
-os.environ["WANDB_DIR"] = f"/work/{USER_NAME}/"
-os.environ["WANDB_CACHE_DIR"] = f"/work/{USER_NAME}/.cache/"
-os.environ["WANDB_CONFIG_DIR"] = f"/work/{USER_NAME}/.config/wandb"
-os.environ["WANDB_DATA_DIR"] = f"/work/{USER_NAME}/.cache/wandb-data/"
-os.environ["WANDB_ARTIFACT_DIR"] = f"/work/{USER_NAME}/artifacts"
-
-if not os.path.exists(os.getenv("WANDB_CONFIG_DIR")):
-    os.makedirs(os.getenv("WANDB_CONFIG_DIR"))
-
 import logging
 import sys
 import optuna
 from optuna.integration.wandb import WeightsAndBiasesCallback
 from optuna.study import StudyDirection
-from optuna_dashboard import run_server
 from ultralytics import YOLO
 from codecarbon import track_emissions, OfflineEmissionsTracker
-import wandb
 from dotenv import load_dotenv
 import os
 
 load_dotenv()
+
+USER_NAME = getpass.getuser()
+
+DEVICE_PATH = os.getenv("DEVICE_PATH") or "/work"
+os.environ["WANDB_DIR"] = f"{DEVICE_PATH}/{USER_NAME}/"
+os.environ["WANDB_CACHE_DIR"] = f"{DEVICE_PATH}/{USER_NAME}/.cache/"
+os.environ["WANDB_CONFIG_DIR"] = f"{DEVICE_PATH}/{USER_NAME}/.config/wandb"
+os.environ["WANDB_DATA_DIR"] = f"{DEVICE_PATH}/{USER_NAME}/.cache/wandb-data/"
+os.environ["WANDB_ARTIFACT_DIR"] = f"{DEVICE_PATH}/{USER_NAME}/artifacts"
+
+if not os.path.exists(os.getenv("WANDB_CONFIG_DIR")):
+    os.makedirs(os.getenv("WANDB_CONFIG_DIR"))
+
+import wandb
 
 
 WANDB_API_KEY = os.getenv("WANDB_API_KEY")
@@ -96,17 +96,16 @@ def main(study_name: str):
     try:
         tracker.start()
         optuna.logging.get_logger("optuna").addHandler(logging.StreamHandler(sys.stdout))
-        wandb_kwargs = {"project": "cv-combined-small"}
+        wandb_kwargs = {"project": study_name}
         wandbc = WeightsAndBiasesCallback(wandb_kwargs=wandb_kwargs, as_multirun=True)
 
-        study_name = "cv-combined-small"
         MYSQL_USER = os.getenv("MYSQL_USER")
         MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD")
 
         storage_name = f"mysql+pymysql://{MYSQL_USER}:{MYSQL_PASSWORD}@mysql.stud.ntnu.no/timma_tdt4265_db"
 
         directions = [
-            StudyDirection.MAXIMIZE,  # precision
+            StudyDirection.MAXIMIZE,  # mAP50_95
         ]
 
         study = optuna.create_study(
@@ -117,7 +116,7 @@ def main(study_name: str):
         )
 
         # Run your study
-        for _ in range(10):
+        for _ in range(100):
             study.optimize(objective, n_trials=10, callbacks=[wandbc])
             tracker.flush()
     finally:
@@ -125,5 +124,5 @@ def main(study_name: str):
 
 
 if __name__ == "__main__":
-   study_name = "combined_yolo_epochs"
+   study_name = "cv-combined-small"
    main(study_name)
