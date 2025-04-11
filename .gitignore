@@ -2,6 +2,7 @@ data/images/*
 data/labels/*
 data/rgb/*
 data/lidar/*
+submissions/*
 *.pt
 runs/*
 *.db
