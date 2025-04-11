@@ -30,11 +30,14 @@ conda create -y --prefix ${ENV_PATH} python=3.10
 
 # Activate the environment
 conda activate ${ENV_PATH}
-cd computer-vision/
 pip install -r requirements.txt
 
 echo "Downloaded dependencies:"
 pip freeze
+
+# Enable W&B logging for Ultralytics
+yolo settings wandb=True
+
 
 # Run the Python script
 python train-combined.py
