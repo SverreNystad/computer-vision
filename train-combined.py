@@ -59,7 +59,7 @@ def objective(trial: optuna.Trial):
 
     # Train model with the sampled hyperparameters
     model.train(
-        data=f"/work/{USER_NAME}/computer-vision/data/data-combined.yaml",
+        data=f"{DEVICE_PATH}/{USER_NAME}/computer-vision/data/data-combined.yaml",
         project="cv-combined-small",
         epochs=epochs,
         imgsz=1024,
