@@ -22,6 +22,7 @@ cp -r "$DATASET_PATH/rgb" "$DEST_DIR"
 
 # Copy the entire Poles directory into the combined folder
 echo "Copying full Poles directory into combined folder..."
-cp -r "$DATASET_PATH" "$COMBINED_DIR"
+cp -r "$DEST_DIR/lidar/." "$COMBINED_DIR"
+cp -r "$DEST_DIR/rgb/." "$COMBINED_DIR"
 
 echo "Data configuration completed successfully."
