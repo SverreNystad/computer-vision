@@ -32,7 +32,7 @@ print(f"WANDB_API_KEY: {WANDB_API_KEY}")
 wandb.login(key=WANDB_API_KEY)
 
 def objective(trial: optuna.Trial):
-    epochs = trial.suggest_int("epochs", 1, 10)
+    epochs = trial.suggest_int("epochs", 1, 3000)
 
     # From the YOLO default search space
     lr0 = trial.suggest_float("lr0", 1e-5, 1e-1, log=True)
@@ -103,8 +103,10 @@ def main(study_name: str):
         optuna.logging.get_logger("optuna").addHandler(logging.StreamHandler(sys.stdout))
 
         study_name = "csv-combined-small"
-        storage_name = f"sqlite:///{study_name}.db"
+        MYSQL_USER = os.getenv("MYSQL_USER")
+        MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD")
 
+        storage_name = f"mysql+pymysql://{MYSQL_USER}:{MYSQL_PASSWORD}@mysql.stud.ntnu.no/timma_tdt4265_db"
 
         directions = [
             StudyDirection.MAXIMIZE,  # precision
@@ -130,6 +132,5 @@ def main(study_name: str):
 
 
 if __name__ == "__main__":
-   study_name = "lidar_yolo_epochs"
+   study_name = "combined_yolo_epochs"
    main(study_name)
-   run_server(study_name)

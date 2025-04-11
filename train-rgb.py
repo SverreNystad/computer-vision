@@ -64,7 +64,7 @@ def objective(trial: optuna.Trial):
 
     # Train model with the sampled hyperparameters
     model.train(
-        data=f"/work/{USER_NAME}/computer-vision/data/data.yaml",
+        data=f"/work/{USER_NAME}/computer-vision/data/data-rgb.yaml",
         project="cv-rgb-small",
         epochs=epochs,
         lr0=lr0,
@@ -104,7 +104,10 @@ def main(study_name: str):
         tracker.start()
         optuna.logging.get_logger("optuna").addHandler(logging.StreamHandler(sys.stdout))
 
-        storage_name = f"mysql+pymysql://root:CVisCOOL@127.0.0.1:3307/optuna_db"
+        MYSQL_USER = os.getenv("MYSQL_USER")
+        MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD")
+
+        storage_name = f"mysql+pymysql://{MYSQL_USER}:{MYSQL_PASSWORD}@mysql.stud.ntnu.no/timma_tdt4265_db"
 
         directions = [
             StudyDirection.MAXIMIZE,  # precision
