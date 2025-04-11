@@ -1,6 +1,6 @@
 #!/bin/sh
 #SBATCH --account=share-ie-idi
-#SBATCH --job-name=combined-optuna-search
+#SBATCH --job-name="combined-optuna-search"
 #SBATCH --time=3-00:25:00
 #SBATCH --partition=GPUQ
 #SBATCH --gres=gpu:1
@@ -11,6 +11,7 @@
 #SBATCH --error=output_combined.err
 #SBATCH --mail-user=sverrnys@ntnu.no
 #SBATCH --mail-type=ALL
+#SBATCH --cpus-per-task=4
 
 
 WORKDIR=${SLURM_SUBMIT_DIR}
