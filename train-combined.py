@@ -50,9 +50,9 @@ def objective(trial: optuna.Trial):
     translate = trial.suggest_float("translate", 0.0, 1.0)
     scale = trial.suggest_float("scale", 0.0, 0.9)
     shear = trial.suggest_float("shear", 0.0, 10.0)
-    perspective = 0.00012
     flipud = trial.suggest_float("flipud", 0.2, 0.8)
     fliplr = 0.5 
+    perspective = 0.00012
 
     # Initialize model
     model = YOLO("yolo11s.yaml")
@@ -61,6 +61,7 @@ def objective(trial: optuna.Trial):
     model.train(
         data=f"{DEVICE_PATH}/{USER_NAME}/computer-vision/data/data-combined.yaml",
         project="cv-combined-small",
+        optimizer="AdamW",
         epochs=epochs,
         imgsz=1024,
         lr0=lr0,
