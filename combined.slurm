@@ -6,7 +6,7 @@
 #SBATCH --gres=gpu:1
 #SBATCH --mem=32GB
 #SBATCH --nodes=4
-#SBATCH --constraint="(p100|v100|a100|h100)&(gpu16g|gpu32g|gpu40g|gpu80g)"
+#SBATCH --constraint="(v100|a100|h100)&(gpu32g|gpu40g|gpu80g)"
 #SBATCH --output=output_combined.txt
 #SBATCH --error=output_combined.err
 #SBATCH --mail-user=sverrnys@ntnu.no
