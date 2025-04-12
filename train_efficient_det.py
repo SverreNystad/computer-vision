@@ -4,10 +4,11 @@ import optuna
 import wandb
 import torch
 import torch.optim as optim
-from effdet import get_efficientdet_config, EfficientDet
-from effdet.efficientdet import DetBenchPredict  # inference wrapper
+from effdet import get_efficientdet_config, EfficientDet, DetBenchTrain, DetBenchPredict
+from effdet import DetBenchPredict  # inference wrapper
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms
+from torchvision.transforms import v2
 from PIL import Image
 from tqdm import tqdm
 from optuna.integration.wandb import WeightsAndBiasesCallback
@@ -16,6 +17,9 @@ from dotenv import load_dotenv
 from torchmetrics.detection.mean_ap import MeanAveragePrecision
 import sys, logging
 from optuna.study import StudyDirection
+import albumentations as A
+from albumentations.pytorch import ToTensorV2
+import numpy as np
 
 load_dotenv()
 
@@ -35,13 +39,17 @@ WANDB_API_KEY = os.getenv("WANDB_API_KEY")
 print(f"WANDB_API_KEY: {WANDB_API_KEY}")
 wandb.login(key=WANDB_API_KEY)
 
+#def collate_fn(batch):
+#    images, targets = zip(*batch)
+#    images = torch.stack(images, dim=0)
+#    return images, list(targets) 
 
 class OurDataset(Dataset):
-    def __init__(self, image_dir, label_dir, transform=None):
+    def __init__(self, image_dir, label_dir, transform):
         self.img_dir = image_dir
         self.label_dir = label_dir
         self.transform = transform
-        self.img_files = sorted([f for f in os.listdir(self.img_dir) if f.endswith((".jpg", ".png"))])
+        self.img_files = sorted([f for f in os.listdir(self.img_dir) if f.lower().endswith((".jpg", ".png"))])
 
     def __len__(self):
         return len(self.img_files)
@@ -52,9 +60,7 @@ class OurDataset(Dataset):
         label_file = os.path.splitext(img_file)[0] + ".txt"
         label_path = os.path.join(self.label_dir, label_file)
 
-        img = Image.open(img_path).convert("RGB")
-        if self.transform:
-            img = self.transform(img)
+        img = np.array(Image.open(img_path).convert("RGB"), dtype=np.float32)
 
         boxes = []
         labels = []
@@ -63,9 +69,17 @@ class OurDataset(Dataset):
                 parts = line.strip().split()
                 labels.append(int(parts[0]))
                 boxes.append(list(map(float, parts[1:])))
+
+        transformed = self.transform(image=img, bboxes=boxes, labels=labels)
+        img = transformed["image"]
+        boxes = transformed["bboxes"]
+        labels = transformed["labels"]
+
         targets = {
-            "boxes": torch.tensor(boxes, dtype=torch.float32) if boxes else torch.empty((0, 4)),
-            "labels": torch.tensor(labels, dtype=torch.int64) if labels else torch.empty((0,), dtype=torch.int64)
+            "bbox": torch.tensor(boxes, dtype=torch.float32) if boxes else torch.empty((0, 4)),
+            "cls": torch.tensor(labels, dtype=torch.int64) if labels else torch.empty((0,), dtype=torch.int64),
+            "img_scale": 1.0,
+            "img_size": torch.tensor([img.size(dim=1), img.size(dim=2)], dtype=torch.float32),
         }
         return img, targets
 
@@ -81,57 +95,81 @@ def convert_box_format(boxes: torch.Tensor) -> torch.Tensor:
     return torch.stack([xmin, ymin, xmax, ymax], dim=-1)
 
 
-def objective(trial: optuna.Trial):
-    run = wandb.init(project="cv-efficientdet", reinit=True)
+def objective(trail: optuna.Trial):
+    num_epochs = 1# trail.suggest_int("epochs", 1, 2)
+    learning_rate = trail.suggest_float("lr", 1e-5, 1e-1, log=True)
+    weight_decay = trail.suggest_float("weight_decay", 0.0, 0.001)
+    brightness = trail.suggest_float("brightness", 0.0, 1.0)
+    hue = trail.suggest_float("hue", 0.0, 0.5)
+    saturation = trail.suggest_float("saturation", 0.0, 1.0)
+    contrast = trail.suggest_float("contrast", 0.0, 1.0)
+    rotation = trail.suggest_float("rotation", 0.0, 45.0)
+    translate_x = trail.suggest_float("translate_x", 0.0, 1.0)
+    translate_y = trail.suggest_float("translate_y", 0.0, 1.0)
+    scale = trail.suggest_float("scale", 0.0, 0.9)
+    shear = trail.suggest_float("shear", 0.0, 10.0)
+    flipud = trail.suggest_float("flipud", 0.2, 0.8)
 
-    num_epochs = trial.suggest_int("epochs", 1, 6000)
-    learning_rate = trial.suggest_float("lr", 1e-5, 1e-1, log=True)
-    weight_decay = trial.suggest_float("weight_decay", 0.0, 0.001)
+    transform = A.Compose([
+        A.Resize(768, 768),
+        A.HorizontalFlip(p=0.5),
+        A.VerticalFlip(p=flipud),
+        A.ColorJitter(brightness=brightness, contrast=contrast, saturation=saturation, hue=hue),
+        A.Affine(rotate=rotation, translate_percent={'x': translate_x, 'y': translate_y},
+                 scale=(1.0 - scale, 1.0 + scale), shear=shear),
+        A.Perspective(p=0.00012),
+        ToTensorV2()
+    ], bbox_params=A.BboxParams(format='yolo', label_fields=['labels']))
 
-    transform = transforms.Compose([transforms.ToTensor()])
-    train_img_dir = f"{DEVICE_PATH}/{USER_NAME}/computer-vision/data/rgb/train/images"
-    train_label_dir = f"{DEVICE_PATH}/{USER_NAME}/computer-vision/data/rgb/train/labels"
-    val_img_dir = f"{DEVICE_PATH}/{USER_NAME}/computer-vision/data/rgb/val/images"
-    val_label_dir = f"{DEVICE_PATH}/{USER_NAME}/computer-vision/data/rgb/val/labels"
+    train_img_dir = f"{DEVICE_PATH}/{USER_NAME}/computer-vision/data/rgb/images/train"
+    train_label_dir = f"{DEVICE_PATH}/{USER_NAME}/computer-vision/data/rgb/labels/train"
+    val_img_dir = f"{DEVICE_PATH}/{USER_NAME}/computer-vision/data/rgb/images/valid"
+    val_label_dir = f"{DEVICE_PATH}/{USER_NAME}/computer-vision/data/rgb/labels/valid"
 
     train_dataset = OurDataset(train_img_dir, train_label_dir, transform=transform)
     val_dataset = OurDataset(val_img_dir, val_label_dir, transform=transform)
-    train_loader = DataLoader(train_dataset, batch_size=4, shuffle=True, num_workers=2)
-    val_loader = DataLoader(val_dataset, batch_size=4, shuffle=False, num_workers=2)
+    train_loader = DataLoader(train_dataset, batch_size=1, shuffle=True, num_workers=2)
+    val_loader = DataLoader(val_dataset, batch_size=1, shuffle=False, num_workers=2)
 
     model_name = 'tf_efficientdet_d2'
     config = get_efficientdet_config(model_name)
     config.num_classes = 1  
-    model = EfficientDet(config, pretrained_backbone=True)
+    base_model = EfficientDet(config, pretrained_backbone=True)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model.to(device)
-    optimizer = optim.AdamW(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
+    print(device)
+    base_model.to(device)
+
+    train_model = DetBenchTrain(base_model)
+    train_model.to(device)
+
+    optimizer = optim.AdamW(train_model.parameters(), lr=learning_rate, weight_decay=weight_decay)
 
     best_val_loss = float('inf')
 
     for epoch in tqdm(range(num_epochs), desc="Training Epochs"):
-        model.train()
+        train_model.train()
         running_loss = 0.0
-        for images, targets in train_loader:
-            images = [img.to(device) for img in images]
-            targets = [{k: v.to(device) for k, v in target.items()} for target in targets]
+        for images, targets in tqdm(iter(train_loader), desc="Training on images"):
+            images = images.to(device)#torch.stack(images, dim=0)#images.to(device)
+            targets = {k: v.to(device) for k, v in targets.items()}
 
             optimizer.zero_grad()
-            loss_dict = model(images, targets)
-            loss = sum(loss for loss in loss_dict.values())
+            loss_dict = train_model(images, targets)
+            loss = loss_dict["loss"]#sum(loss for loss in loss_dict.values())
             loss.backward()
             optimizer.step()
             running_loss += loss.item()
         avg_train_loss = running_loss / len(train_loader)
 
-        model.eval()
+        train_model.eval()
         val_loss = 0.0
         with torch.no_grad():
-            for images, targets in val_loader:
-                images = [img.to(device) for img in images]
-                targets = [{k: v.to(device) for k, v in target.items()} for target in targets]
-                loss_dict = model(images, targets)
-                loss = sum(loss for loss in loss_dict.values())
+            for images, targets in tqdm(iter(val_loader), desc="Validating on images"):
+                images = images.to(device)#torch.stack(images, dim=0)#images.to(device)
+                targets = {k: v.to(device) for k, v in targets.items()}
+
+                loss_dict = train_model(images, targets)
+                loss = loss_dict["loss"]#sum(loss for loss in loss_dict.values())
                 val_loss += loss.item()
         avg_val_loss = val_loss / len(val_loader)
 
@@ -147,7 +185,8 @@ def objective(trial: optuna.Trial):
             best_val_loss = avg_val_loss
         print(f"Epoch {epoch + 1}/{num_epochs}: Train {avg_train_loss:.4f}, Val {avg_val_loss:.4f}")
 
-    inference_model = DetBenchPredict(model)
+    inference_model = DetBenchPredict(base_model)
+    inference_model.to(device)
     inference_model.eval()
 
     map50_metric = MeanAveragePrecision(iou_thresholds=[0.5])
@@ -156,23 +195,45 @@ def objective(trial: optuna.Trial):
     all_targets = []
 
     with torch.no_grad():
-        for images, targets in val_loader:
-            images = [img.to(device) for img in images]
-            preds = inference_model(images)
-            for pred, target in zip(preds, targets):
-                gt_boxes = target["boxes"].to(device)
-                gt_boxes = convert_box_format(gt_boxes) if gt_boxes.numel() > 0 else gt_boxes
-                all_targets.append({
-                    "boxes": gt_boxes,
-                    "labels": target["labels"].to(torch.int64)
-                })
-                pred_boxes = pred["boxes"].to(device) if "boxes" in pred else torch.empty((0, 4), device=device)
-                pred_boxes = convert_box_format(pred_boxes) if pred_boxes.numel() > 0 else pred_boxes
-                all_preds.append({
-                    "boxes": pred_boxes,
-                    "scores": pred["scores"].to(device) if "scores" in pred else torch.empty((0,), device=device),
-                    "labels": pred["labels"].to(torch.int64) if "labels" in pred else torch.empty((0,), device=device)
-                })
+        for images, target in tqdm(iter(val_loader), desc="Final validation"):
+            images = images.to(device)#torch.stack(images, dim=0)
+            target = {k: v.to(device) for k, v in target.items()}
+            pred = inference_model(images)
+            pred = pred.squeeze(0)
+            pred.to(device)
+            if pred.numel() == 0:
+                boxes = torch.empty((0, 4), device=device)
+                boxes.to(device)
+                scores = torch.empty((0,), device=device)
+                scores.to(device)
+                labels = torch.empty((0,), dtype=torch.int64, device=device)
+                labels.to(device)
+            else:
+                # Assuming pred is of shape [N, 6]: [x1, y1, x2, y2, score, label]
+                boxes = pred[:, :4]
+                boxes.to(device)
+                scores = pred[:, 4]
+                scores.to(device)
+                labels = pred[:, 5].long()  # class labels as integers
+                labels.to(device)
+
+            all_preds.append({
+                "boxes": boxes,
+                "scores": scores,
+                "labels": labels
+            })
+
+            gt_boxes = target["bbox"]
+            if gt_boxes.numel() > 0:
+                gt_boxes = convert_box_format(gt_boxes)
+            gt_labels = target["cls"]
+            if gt_labels.ndim > 1:
+                gt_labels = gt_labels.view(-1)
+
+            all_targets.append({
+                "boxes": gt_boxes.to(device),
+                "labels": gt_labels.to(device)
+            })
 
     map50_metric.update(all_preds, all_targets)
     map95_metric.update(all_preds, all_targets)
@@ -183,7 +244,6 @@ def objective(trial: optuna.Trial):
         "mAP_50": results_map50["map"] if "map" in results_map50 else results_map50,
         "mAP_95": results_map95["map"] if "map" in results_map95 else results_map95,
     })
-    run.finish()
 
     return results_map95["map"] if "map" in results_map95 else results_map95
 
@@ -191,6 +251,7 @@ def objective(trial: optuna.Trial):
 #@track_emissions(offline=True, country_iso_code="NOR")
 def main(study_name: str):
     tracker = OfflineEmissionsTracker(country_iso_code="NOR")
+    run = wandb.init(entity="sverrenystad-ntnu", project=study_name, reinit=True)
     try:
         optuna.logging.get_logger("optuna").addHandler(logging.StreamHandler(sys.stdout))
         MYSQL_USER = os.getenv("MYSQL_USER")
@@ -210,6 +271,7 @@ def main(study_name: str):
         print("Best trial:", study.best_trial)
     finally:
         tracker.stop()
+        run.finish()
 
 
 if __name__ == "__main__":
