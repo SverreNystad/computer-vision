@@ -30,7 +30,6 @@ if __name__ == "__main__":
         source=f"/work/{USER_NAME}/computer-vision/data/rgb/images/test",
         project="submissions",
         name="cv-rgb-small",
-        save=True,
         save_txt=True,
         save_conf=True
         )
