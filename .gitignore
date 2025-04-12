@@ -11,6 +11,7 @@ cv-lidar/*
 cv-rgb-small/*
 cv-combined-small/
 data/combined/
+*.pth
 
 
 # Byte-compiled / optimized / DLL files
