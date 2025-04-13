@@ -21,6 +21,7 @@ import numpy as np
 from svetim_detector import get_custom_detector
 
 load_dotenv()
+STUDY_NAME = "cv-svetimdet-v2"
 
 # Setup environment and wandb directories
 USER_NAME = getpass.getuser()
@@ -116,9 +117,13 @@ def convert_box_format(boxes: torch.Tensor) -> torch.Tensor:
     ymax = y_center + h / 2
     return torch.stack([xmin, ymin, xmax, ymax], dim=-1)
 
+wandb_kwargs = {"entity": "sverrenystad-ntnu", "project": STUDY_NAME}
+wandb_callback = WeightsAndBiasesCallback(wandb_kwargs=wandb_kwargs, as_multirun=True)
 
+@wandb_callback.track_in_wandb()
 def objective(trail: optuna.Trial):
-    num_epochs = 1# trail.suggest_int("epochs", 1, 2)
+
+    num_epochs = 1#trail.suggest_int("epochs", 1, 6000)
     learning_rate = trail.suggest_float("lr", 1e-5, 1e-1, log=True)
     weight_decay = trail.suggest_float("weight_decay", 0.0, 0.001)
     brightness = trail.suggest_float("brightness", 0.0, 1.0)
@@ -179,7 +184,7 @@ def objective(trail: optuna.Trial):
         avg_train_loss = running_loss / len(train_loader)
         print(f"Epoch {epoch+1}: Average Training Loss = {avg_train_loss:.4f}")
 
-        model.eval()
+        #model.eval()
         val_loss = 0.0
         with torch.no_grad():
             for images, targets in tqdm(val_loader, desc=f"Validating on images in epoch {epoch+1}/{num_epochs}"):
@@ -195,18 +200,18 @@ def objective(trail: optuna.Trial):
         metric_map95 = MeanAveragePrecision(iou_thresholds=[0.95])
         all_preds = []
         all_targets = []
-
-        eval_bar = tqdm(val_loader, desc=f"Evaluation Epoch {epoch+1}")
+        
+        model.eval()
         with torch.no_grad():
-            for images, targets in eval_bar:
+            for images, targets in tqdm(val_loader, desc=f"Evaluation Epoch {epoch+1}/{num_epochs}"):
                 images = [img.to(device) for img in images]
                 # In eval mode, the model returns predictions as a list of dictionaries.
                 predictions = model(images)
                 # For each image, create ground truth dictionaries expected by torchmetrics.
                 for i, pred in enumerate(predictions):
                     gt = {
-                        "boxes": targets[i]["bbox"].to(device),
-                        "labels": targets[i]["cls"].to(device)
+                        "boxes": targets[i]["boxes"].to(device),
+                        "labels": targets[i]["labels"].to(device)
                     }
                     all_preds.append(pred)
                     all_targets.append(gt)
@@ -242,8 +247,8 @@ def objective(trail: optuna.Trial):
 #@track_emissions(offline=True, country_iso_code="NOR")
 def main(study_name: str):
     tracker = OfflineEmissionsTracker(country_iso_code="NOR")
-    run = wandb.init(entity="sverrenystad-ntnu", project=study_name, reinit=True)
     try:
+        #wandb.init(entity="sverrenystad-ntnu", project=STUDY_NAME, reinit=True)
         optuna.logging.get_logger("optuna").addHandler(logging.StreamHandler(sys.stdout))
         MYSQL_USER = os.getenv("MYSQL_USER")
         MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD")
@@ -254,18 +259,14 @@ def main(study_name: str):
             load_if_exists=True,
             directions=[StudyDirection.MAXIMIZE],
         )
-        wandb_kwargs = {"project": study_name}
-        wandb_callback = WeightsAndBiasesCallback(wandb_kwargs=wandb_kwargs, as_multirun=True)
         for _ in range(100):
             study.optimize(objective, n_trials=10, callbacks=[wandb_callback])
             tracker.flush()
+            wandb.finish()
         print("Best trial:", study.best_trial)
     finally:
         tracker.stop()
-        run.finish()
 
 
 if __name__ == "__main__":
-    study_name = "cv-svetimdet"
-    main(study_name)
-
+    main(STUDY_NAME)
