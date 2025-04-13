@@ -123,7 +123,7 @@ wandb_callback = WeightsAndBiasesCallback(wandb_kwargs=wandb_kwargs, as_multirun
 @wandb_callback.track_in_wandb()
 def objective(trail: optuna.Trial):
 
-    num_epochs = 1#trail.suggest_int("epochs", 1, 6000)
+    num_epochs = trail.suggest_int("epochs", 1, 6000)
     learning_rate = trail.suggest_float("lr", 1e-5, 1e-1, log=True)
     weight_decay = trail.suggest_float("weight_decay", 0.0, 0.001)
     brightness = trail.suggest_float("brightness", 0.0, 1.0)
@@ -136,6 +136,22 @@ def objective(trail: optuna.Trial):
     scale = trail.suggest_float("scale", 0.0, 0.9)
     shear = trail.suggest_float("shear", 0.0, 10.0)
     flipud = trail.suggest_float("flipud", 0.2, 0.8)
+
+    wandb.log({
+        "parameters/num_epochs": num_epochs,
+        "parameters/lr": learning_rate,
+        "parameters/weight_decay": weight_decay,
+        "parameters/brightness": brightness,
+        "parameters/hue": hue,
+        "parameters/saturation": saturation,
+        "parameters/contrast": contrast,
+        "parameters/rotation": rotation,
+        "parameters/translate_x": translate_x,
+        "parameters/translate_y": translate_y,
+        "parameters/scale": scale,
+        "parameters/shear": shear,
+        "parameters/flipud": flipud,
+    })
 
     transform = A.Compose([
         A.Resize(768, 768),
@@ -229,8 +245,6 @@ def objective(trail: optuna.Trial):
             "val/loss": avg_val_loss,
             "metrics/mAP50": results_map50["map"],
             "metrics/mAP95": results_map95["map"],
-            "lr": learning_rate,
-            "weight_decay": weight_decay
         })
 
         # Save final epoch’s mAP@0.95 to be returned as the objective value.
