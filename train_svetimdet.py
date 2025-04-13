@@ -75,8 +75,8 @@ class OurDataset(Dataset):
         labels = transformed["labels"]
 
         targets = {
-            "bbox": torch.tensor(boxes, dtype=torch.float32) if boxes else torch.empty((0, 4)),
-            "cls": torch.tensor(labels, dtype=torch.int64) if labels else torch.empty((0,), dtype=torch.int64),
+            "boxes": torch.tensor(boxes, dtype=torch.float32) if boxes else torch.empty((0, 4)),
+            "labels": torch.tensor(labels, dtype=torch.int64) if labels else torch.empty((0,), dtype=torch.int64),
         }
         return img, targets
 
