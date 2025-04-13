@@ -43,6 +43,25 @@ wandb.login(key=WANDB_API_KEY)
 #    images = torch.stack(images, dim=0)
 #    return images, list(targets) 
 
+def yolo_to_xyxy(box, img_width, img_height):
+    """
+    Convert a single bounding box from YOLO format to xyxy format.
+
+    Args:
+        box (list or tuple): [x_center, y_center, width, height] in normalized coordinates.
+        img_width (int): Image width in pixels.
+        img_height (int): Image height in pixels.
+
+    Returns:
+        list: Bounding box in [xmin, ymin, xmax, ymax] format in absolute pixel coordinates.
+    """
+    x_center, y_center, w, h = box
+    xmin = (x_center - w / 2) * img_width
+    ymin = (y_center - h / 2) * img_height
+    xmax = (x_center + w / 2) * img_width
+    ymax = (y_center + h / 2) * img_height
+    return [xmin, ymin, xmax, ymax]
+
 class OurDataset(Dataset):
     def __init__(self, image_dir, label_dir, transform):
         self.img_dir = image_dir
@@ -73,6 +92,9 @@ class OurDataset(Dataset):
         img = transformed["image"]
         boxes = transformed["bboxes"]
         labels = transformed["labels"]
+
+        _, img_height, img_width = img.shape
+        boxes = [yolo_to_xyxy(b, img_width, img_height) for b in boxes]
 
         targets = {
             "boxes": torch.tensor(boxes, dtype=torch.float32) if boxes else torch.empty((0, 4)),
