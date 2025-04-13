@@ -4,8 +4,6 @@ import optuna
 import wandb
 import torch
 import torch.optim as optim
-from effdet import get_efficientdet_config, EfficientDet, DetBenchTrain, DetBenchPredict
-from effdet import DetBenchPredict  # inference wrapper
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms
 from torchvision.transforms import v2
