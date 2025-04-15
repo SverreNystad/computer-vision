@@ -21,7 +21,7 @@ import numpy as np
 from svetim_detector import get_custom_detector
 
 load_dotenv()
-STUDY_NAME = "cv-svetimdet-v3"
+STUDY_NAME = "cv-svetimdet-v4"
 
 # Setup environment and wandb directories
 USER_NAME = getpass.getuser()
