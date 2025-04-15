@@ -102,6 +102,7 @@ def get_custom_detector():
         backbone=backbone,
         box_head=head,
         rpn_head=rpn_head,
+        #num_classes=2,
         box_predictor=predictor,
         rpn_anchor_generator=anchor_generator,
         box_roi_pool=roi_pooler

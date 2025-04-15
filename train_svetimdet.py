@@ -21,7 +21,7 @@ import numpy as np
 from svetim_detector import get_custom_detector
 
 load_dotenv()
-STUDY_NAME = "cv-svetimdet-v2"
+STUDY_NAME = "cv-svetimdet-v3"
 
 # Setup environment and wandb directories
 USER_NAME = getpass.getuser()
@@ -86,7 +86,7 @@ class OurDataset(Dataset):
         with open(label_path, "r") as f:
             for line in f:
                 parts = line.strip().split()
-                labels.append(int(parts[0]))
+                labels.append(int(parts[0])+1)
                 boxes.append(list(map(float, parts[1:])))
 
         transformed = self.transform(image=img, bboxes=boxes, labels=labels)
