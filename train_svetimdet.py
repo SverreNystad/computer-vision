@@ -4,9 +4,11 @@ import optuna
 import wandb
 import torch
 import torch.optim as optim
+import torchvision
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms
 from torchvision.transforms import v2
+import torchvision.utils as tu
 from PIL import Image
 from tqdm import tqdm
 from optuna.integration.wandb import WeightsAndBiasesCallback
@@ -21,7 +23,7 @@ import numpy as np
 from svetim_detector import get_custom_detector
 
 load_dotenv()
-STUDY_NAME = "cv-svetimdet-v4"
+STUDY_NAME = "cv-svetimdet-v4.5"
 
 # Setup environment and wandb directories
 USER_NAME = getpass.getuser()
@@ -79,7 +81,7 @@ class OurDataset(Dataset):
         label_file = os.path.splitext(img_file)[0] + ".txt"
         label_path = os.path.join(self.label_dir, label_file)
 
-        img = np.array(Image.open(img_path).convert("RGB"), dtype=np.float32)
+        #img = np.array(Image.open(img_path).convert("RGB"), dtype=np.float32)
 
         boxes = []
         labels = []
@@ -89,10 +91,12 @@ class OurDataset(Dataset):
                 labels.append(int(parts[0])+1)
                 boxes.append(list(map(float, parts[1:])))
 
-        transformed = self.transform(image=img, bboxes=boxes, labels=labels)
-        img = transformed["image"]
-        boxes = transformed["bboxes"]
-        labels = transformed["labels"]
+        #transformed = self.transform(image=img, bboxes=boxes, labels=labels)
+        #img = transformed["image"]
+        #boxes = transformed["bboxes"]
+        #labels = transformed["labels"]
+
+        img = transforms.ToTensor()(Image.open(img_path).convert("RGB"))
 
         _, img_height, img_width = img.shape
         boxes = [yolo_to_xyxy(b, img_width, img_height) for b in boxes]
@@ -123,7 +127,7 @@ wandb_callback = WeightsAndBiasesCallback(wandb_kwargs=wandb_kwargs, as_multirun
 @wandb_callback.track_in_wandb()
 def objective(trail: optuna.Trial):
 
-    num_epochs = trail.suggest_int("epochs", 1, 6000)
+    num_epochs = 5_000#trail.suggest_int("epochs", 1, 6000)
     learning_rate = trail.suggest_float("lr", 1e-5, 1e-1, log=True)
     weight_decay = trail.suggest_float("weight_decay", 0.0, 0.001)
     brightness = trail.suggest_float("brightness", 0.0, 1.0)
@@ -153,8 +157,9 @@ def objective(trail: optuna.Trial):
         "parameters/flipud": flipud,
     })
 
+    # These transformations do someting wierd to the image, they are commented out in the data
     transform = A.Compose([
-        A.Resize(768, 768),
+        A.Resize(1024, 1024),
         A.HorizontalFlip(p=0.5),
         A.VerticalFlip(p=flipud),
         A.ColorJitter(brightness=brightness, contrast=contrast, saturation=saturation, hue=hue),
@@ -171,8 +176,10 @@ def objective(trail: optuna.Trial):
 
     train_dataset = OurDataset(train_img_dir, train_label_dir, transform=transform)
     val_dataset = OurDataset(val_img_dir, val_label_dir, transform=transform)
-    train_loader = DataLoader(train_dataset, batch_size=4, shuffle=True, num_workers=2, collate_fn=collate_fn)
-    val_loader = DataLoader(val_dataset, batch_size=4, shuffle=False, num_workers=2, collate_fn=collate_fn)
+    n_rows = 4
+    n_cols = 4
+    train_loader = DataLoader(train_dataset, batch_size=n_rows*n_cols, shuffle=True, num_workers=2, collate_fn=collate_fn)
+    val_loader = DataLoader(val_dataset, batch_size=n_rows*n_cols, shuffle=False, num_workers=2, collate_fn=collate_fn)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = get_custom_detector() 
@@ -183,6 +190,8 @@ def objective(trail: optuna.Trial):
     best_val_loss = float('inf')
 
     final_map95 = 0.0
+    final_map50 = 0.0
+
     for epoch in range(num_epochs):
         model.train()
         running_loss = 0.0
@@ -216,7 +225,11 @@ def objective(trail: optuna.Trial):
         metric_map95 = MeanAveragePrecision(iou_thresholds=[0.95])
         all_preds = []
         all_targets = []
-        
+        wandb_true_images = []
+        wandb_pred_images = []
+
+        should_save_images = False
+
         model.eval()
         with torch.no_grad():
             for images, targets in tqdm(val_loader, desc=f"Evaluation Epoch {epoch+1}/{num_epochs}"):
@@ -230,17 +243,40 @@ def objective(trail: optuna.Trial):
                         "labels": targets[i]["labels"].to(device)
                     }
                     all_preds.append(pred)
-                    all_targets.append(gt)
+                    all_targets.append(gt) 
+
+
+                if should_save_images:
+                    predicted_images = []
+                    true_images = []
+                    for i, img in enumerate(images):
+                        predicted_images.append(tu.draw_bounding_boxes(img, predictions[i]["boxes"], colors="red").cpu())
+                        true_images.append(tu.draw_bounding_boxes(img, targets[i]["boxes"].to(device), colors="red").cpu())
+
+                    pred_imgs = tu.make_grid(predicted_images, nrow=n_rows)
+                    true_imgs = tu.make_grid(true_images, nrow=n_rows)
+                    print(f"{pred_imgs.dtype=}")
+                    print(f"{true_imgs.dtype=}")
+
+                    pred_imgs = pred_imgs.cpu().numpy().transpose(1, 2, 0).astype(np.float32)
+                    true_imgs = true_imgs.cpu().numpy().transpose(1, 2, 0).astype(np.float32)
+
+                    wandb_true_images.append(wandb.Image(true_imgs, caption="True boxes and labels"))
+                    wandb_pred_images.append(wandb.Image(pred_imgs, caption="Predicted boxes and labels"))
 
         metric_map50.update(all_preds, all_targets)
         metric_map95.update(all_preds, all_targets)
         results_map50 = metric_map50.compute()
         results_map95 = metric_map95.compute()
+
+        if should_save_images:
+            wandb.summary["predicted_images"] = wandb_pred_images
+            wandb.summary["true_images"] = wandb_true_images
+
         # print(f"Epoch {epoch+1}: mAP@0.5 = {results_map50['map']:.4f}, mAP@0.95 = {results_map95['map']:.4f}")
 
         # Log epoch metrics to WANDB.
         wandb.log({
-            "epoch": epoch + 1,
             "train/loss": avg_train_loss,
             "val/loss": avg_val_loss,
             "metrics/mAP50": results_map50["map"],
@@ -249,13 +285,14 @@ def objective(trail: optuna.Trial):
 
         # Save final epoch’s mAP@0.95 to be returned as the objective value.
         final_map95 = results_map95["map"]
+        final_map50 = results_map50["map"]
 
         if avg_val_loss < best_val_loss:
             best_val_loss = avg_val_loss
         print(f"Epoch {epoch + 1}/{num_epochs}: Train {avg_train_loss:.4f}, Val {avg_val_loss:.4f}, mAP@0.5 = {results_map50['map']:.4f}, mAP@0.95 = {results_map95['map']:.4f}")
 
 
-    return final_map95
+    return final_map95, final_map50
 
 
 #@track_emissions(offline=True, country_iso_code="NOR")
@@ -271,7 +308,7 @@ def main(study_name: str):
             study_name=study_name,
             storage=storage_name,
             load_if_exists=True,
-            directions=[StudyDirection.MAXIMIZE],
+            directions=[StudyDirection.MAXIMIZE, StudyDirection.MAXIMIZE],
         )
         for _ in range(100):
             study.optimize(objective, n_trials=10, callbacks=[wandb_callback])
