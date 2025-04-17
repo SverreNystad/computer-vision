@@ -114,7 +114,7 @@ def kaiming_init(m):
         if m.bias is not None:
             nn.init.constant_(m.bias, 0)
 
-def get_custom_detector():
+def get_custom_detector(rpn_nms_thresh, box_score_thresh, box_nms_thresh):
     pool_size = 7
 
     backbone = SveTimBackbone()
@@ -144,7 +144,10 @@ def get_custom_detector():
         #num_classes=2,
         box_predictor=predictor,
         rpn_anchor_generator=anchor_generator,
-        box_roi_pool=roi_pooler
+        box_roi_pool=roi_pooler,
+        rpn_nms_thresh=rpn_nms_thresh,
+        box_score_thresh=box_score_thresh,
+        box_nms_thresh=box_nms_thresh
     )
     
     model.apply(kaiming_init)

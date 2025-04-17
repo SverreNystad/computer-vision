@@ -141,6 +141,9 @@ def objective(trail: optuna.Trial):
     scale = trail.suggest_float("scale", 0.0, 0.5)
     shear = trail.suggest_float("shear", 0.0, 10.0)
     flipud = trail.suggest_float("flipud", 0.2, 0.8)
+    rpn_nms_thresh = trail.suggest_float("rpn_nms_thresh", 0.1, 0.75)
+    box_score_thresh = trail.suggest_float("box_score_thresh", 0.01, 0.1)
+    box_nms_thresh = trail.suggest_float("box_nms_thresh", 0.1, 0.75)
 
     wandb.log({
         "parameters/num_epochs": num_epochs,
@@ -181,7 +184,7 @@ def objective(trail: optuna.Trial):
     val_loader = DataLoader(val_dataset, batch_size=n_rows*n_cols, shuffle=False, num_workers=2, collate_fn=collate_fn)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = get_custom_detector() 
+    model = get_custom_detector(rpn_nms_thresh, box_score_thresh, box_nms_thresh) 
     model.to(device)
 
     optimizer = optim.AdamW(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
