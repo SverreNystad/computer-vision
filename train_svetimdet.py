@@ -23,7 +23,7 @@ import numpy as np
 from svetim_detector import get_custom_detector
 
 load_dotenv()
-STUDY_NAME = "cv-svetimdet-v4.5"
+STUDY_NAME = "cv-svetimdet-v5"
 
 # Setup environment and wandb directories
 USER_NAME = getpass.getuser()
@@ -81,7 +81,7 @@ class OurDataset(Dataset):
         label_file = os.path.splitext(img_file)[0] + ".txt"
         label_path = os.path.join(self.label_dir, label_file)
 
-        #img = np.array(Image.open(img_path).convert("RGB"), dtype=np.float32)
+        img = np.array(Image.open(img_path).convert("RGB"), dtype=np.uint8)
 
         boxes = []
         labels = []
@@ -91,12 +91,12 @@ class OurDataset(Dataset):
                 labels.append(int(parts[0])+1)
                 boxes.append(list(map(float, parts[1:])))
 
-        #transformed = self.transform(image=img, bboxes=boxes, labels=labels)
-        #img = transformed["image"]
-        #boxes = transformed["bboxes"]
-        #labels = transformed["labels"]
+        transformed = self.transform(image=img, bboxes=boxes, labels=labels)
+        img = transformed["image"]
+        boxes = transformed["bboxes"]
+        labels = transformed["labels"]
 
-        img = transforms.ToTensor()(Image.open(img_path).convert("RGB"))
+        img = torch.from_numpy(img.transpose(2, 0, 1)).float().div(255.0)#transforms.ToTensor()(img)
 
         _, img_height, img_width = img.shape
         boxes = [yolo_to_xyxy(b, img_width, img_height) for b in boxes]
@@ -126,6 +126,7 @@ wandb_callback = WeightsAndBiasesCallback(wandb_kwargs=wandb_kwargs, as_multirun
 
 @wandb_callback.track_in_wandb()
 def objective(trail: optuna.Trial):
+    should_save_images = False 
 
     num_epochs = 5_000#trail.suggest_int("epochs", 1, 6000)
     learning_rate = trail.suggest_float("lr", 1e-5, 1e-1, log=True)
@@ -135,9 +136,9 @@ def objective(trail: optuna.Trial):
     saturation = trail.suggest_float("saturation", 0.0, 1.0)
     contrast = trail.suggest_float("contrast", 0.0, 1.0)
     rotation = trail.suggest_float("rotation", 0.0, 45.0)
-    translate_x = trail.suggest_float("translate_x", 0.0, 1.0)
-    translate_y = trail.suggest_float("translate_y", 0.0, 1.0)
-    scale = trail.suggest_float("scale", 0.0, 0.9)
+    translate_x = trail.suggest_float("translate_x", 0.0, 0.25)
+    translate_y = trail.suggest_float("translate_y", 0.0, 0.25)
+    scale = trail.suggest_float("scale", 0.0, 0.5)
     shear = trail.suggest_float("shear", 0.0, 10.0)
     flipud = trail.suggest_float("flipud", 0.2, 0.8)
 
@@ -157,7 +158,6 @@ def objective(trail: optuna.Trial):
         "parameters/flipud": flipud,
     })
 
-    # These transformations do someting wierd to the image, they are commented out in the data
     transform = A.Compose([
         A.Resize(1024, 1024),
         A.HorizontalFlip(p=0.5),
@@ -166,7 +166,6 @@ def objective(trail: optuna.Trial):
         A.Affine(rotate=rotation, translate_percent={'x': translate_x, 'y': translate_y},
                  scale=(1.0 - scale, 1.0 + scale), shear=shear),
         A.Perspective(p=0.00012),
-        ToTensorV2()
     ], bbox_params=A.BboxParams(format='yolo', label_fields=['labels']))
 
     train_img_dir = f"{DEVICE_PATH}/{USER_NAME}/computer-vision/data/rgb/images/train"
@@ -176,8 +175,8 @@ def objective(trail: optuna.Trial):
 
     train_dataset = OurDataset(train_img_dir, train_label_dir, transform=transform)
     val_dataset = OurDataset(val_img_dir, val_label_dir, transform=transform)
-    n_rows = 4
-    n_cols = 4
+    n_rows = 2
+    n_cols = 2
     train_loader = DataLoader(train_dataset, batch_size=n_rows*n_cols, shuffle=True, num_workers=2, collate_fn=collate_fn)
     val_loader = DataLoader(val_dataset, batch_size=n_rows*n_cols, shuffle=False, num_workers=2, collate_fn=collate_fn)
 
@@ -228,7 +227,6 @@ def objective(trail: optuna.Trial):
         wandb_true_images = []
         wandb_pred_images = []
 
-        should_save_images = False
 
         model.eval()
         with torch.no_grad():
@@ -255,8 +253,6 @@ def objective(trail: optuna.Trial):
 
                     pred_imgs = tu.make_grid(predicted_images, nrow=n_rows)
                     true_imgs = tu.make_grid(true_images, nrow=n_rows)
-                    print(f"{pred_imgs.dtype=}")
-                    print(f"{true_imgs.dtype=}")
 
                     pred_imgs = pred_imgs.cpu().numpy().transpose(1, 2, 0).astype(np.float32)
                     true_imgs = true_imgs.cpu().numpy().transpose(1, 2, 0).astype(np.float32)
