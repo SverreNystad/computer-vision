@@ -23,7 +23,7 @@ import numpy as np
 from svetim_detector import get_custom_detector
 
 load_dotenv()
-STUDY_NAME = "cv-svetimdet-v5"
+STUDY_NAME = "cv-svetimdet-v6"
 
 # Setup environment and wandb directories
 USER_NAME = getpass.getuser()
@@ -128,22 +128,22 @@ wandb_callback = WeightsAndBiasesCallback(wandb_kwargs=wandb_kwargs, as_multirun
 def objective(trail: optuna.Trial):
     should_save_images = False 
 
-    num_epochs = 5_000#trail.suggest_int("epochs", 1, 6000)
-    learning_rate = trail.suggest_float("lr", 1e-5, 1e-1, log=True)
-    weight_decay = trail.suggest_float("weight_decay", 0.0, 0.001)
-    brightness = trail.suggest_float("brightness", 0.0, 1.0)
-    hue = trail.suggest_float("hue", 0.0, 0.5)
-    saturation = trail.suggest_float("saturation", 0.0, 1.0)
-    contrast = trail.suggest_float("contrast", 0.0, 1.0)
-    rotation = trail.suggest_float("rotation", 0.0, 45.0)
-    translate_x = trail.suggest_float("translate_x", 0.0, 0.25)
-    translate_y = trail.suggest_float("translate_y", 0.0, 0.25)
-    scale = trail.suggest_float("scale", 0.0, 0.5)
-    shear = trail.suggest_float("shear", 0.0, 10.0)
-    flipud = trail.suggest_float("flipud", 0.2, 0.8)
-    rpn_nms_thresh = trail.suggest_float("rpn_nms_thresh", 0.1, 0.75)
-    box_score_thresh = trail.suggest_float("box_score_thresh", 0.01, 0.1)
-    box_nms_thresh = trail.suggest_float("box_nms_thresh", 0.1, 0.75)
+    num_epochs = 50#trail.suggest_int("epochs", 1, 6000)
+    learning_rate = trail.suggest_float("lr", 0.0002, 0.0004, log=True)
+    weight_decay = trail.suggest_float("weight_decay", 0.0004, 0.0006)
+    brightness = trail.suggest_float("brightness", 0.35, 0.45)
+    hue = trail.suggest_float("hue", 0.175, 0.225)
+    saturation = trail.suggest_float("saturation", 0.1, 0.15)
+    contrast = trail.suggest_float("contrast", 0.5, 0.6)
+    rotation = trail.suggest_float("rotation", 14.0, 16.0)
+    translate_x = trail.suggest_float("translate_x", 0.1, 0.15)
+    translate_y = trail.suggest_float("translate_y", 0.1, 0.2)
+    scale = trail.suggest_float("scale", 0.05, 0.15)
+    shear = trail.suggest_float("shear", 4.0, 5.0)
+    flipud = trail.suggest_float("flipud", 0.4, 0.5)
+    rpn_nms_thresh = trail.suggest_float("rpn_nms_thresh", 0.625, 0.725)
+    box_score_thresh = trail.suggest_float("box_score_thresh", 0.06, 0.08)
+    box_nms_thresh = trail.suggest_float("box_nms_thresh", 0.2, 0.3)
 
     wandb.log({
         "parameters/num_epochs": num_epochs,
@@ -186,6 +186,7 @@ def objective(trail: optuna.Trial):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = get_custom_detector(rpn_nms_thresh, box_score_thresh, box_nms_thresh) 
     model.to(device)
+    wandb.watch(model)
 
     optimizer = optim.AdamW(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
 
@@ -225,6 +226,8 @@ def objective(trail: optuna.Trial):
 
         metric_map50 = MeanAveragePrecision(iou_thresholds=[0.5])
         metric_map95 = MeanAveragePrecision(iou_thresholds=[0.95])
+        # Recall
+        # Precision
         all_preds = []
         all_targets = []
         wandb_true_images = []
@@ -273,7 +276,7 @@ def objective(trail: optuna.Trial):
             wandb.summary["true_images"] = wandb_true_images
 
         # print(f"Epoch {epoch+1}: mAP@0.5 = {results_map50['map']:.4f}, mAP@0.95 = {results_map95['map']:.4f}")
-
+        print(results_map50)
         # Log epoch metrics to WANDB.
         wandb.log({
             "train/loss": avg_train_loss,
