@@ -27,7 +27,7 @@ import itertools, json, tempfile
 import numpy as np
 
 load_dotenv()
-STUDY_NAME = "cv-svetimdet-v7"
+STUDY_NAME = "cv-svetimdet-test"
 
 # Setup environment and wandb directories
 USER_NAME = getpass.getuser()
@@ -169,21 +169,20 @@ def objective(trail: optuna.Trial):
     should_save_images = False 
 
     num_epochs = 5000#trail.suggest_int("epochs", 1, 6000)
-    learning_rate = trail.suggest_float("lr", 0.0002, 0.0004, log=True)
-    weight_decay = trail.suggest_float("weight_decay", 0.0004, 0.0006)
-    brightness = trail.suggest_float("brightness", 0.35, 0.45)
-    hue = trail.suggest_float("hue", 0.175, 0.225)
-    saturation = trail.suggest_float("saturation", 0.1, 0.15)
-    contrast = trail.suggest_float("contrast", 0.5, 0.6)
-    rotation = trail.suggest_float("rotation", 14.0, 16.0)
-    translate_x = trail.suggest_float("translate_x", 0.1, 0.15)
+    learning_rate = trail.suggest_float("lr", 0.0001, 0.001, log=True)
+    weight_decay = trail.suggest_float("weight_decay", 0.0001, 0.001)
+    brightness = trail.suggest_float("brightness", 0.3, 0.5)
+    hue = trail.suggest_float("hue", 0.015, 0.03)
+    saturation = trail.suggest_float("saturation", 0.5, 0.7)
+    contrast = trail.suggest_float("contrast", 0.2, 0.8)
+    rotation = trail.suggest_float("rotation", 5.0, 15.0)
+    translate_x = trail.suggest_float("translate_x", 0.1, 0.2)
     translate_y = trail.suggest_float("translate_y", 0.1, 0.2)
-    scale = trail.suggest_float("scale", 0.05, 0.15)
-    shear = trail.suggest_float("shear", 4.0, 5.0)
-    flipud = trail.suggest_float("flipud", 0.4, 0.5)
-    rpn_nms_thresh = trail.suggest_float("rpn_nms_thresh", 0.625, 0.725)
-    box_score_thresh = trail.suggest_float("box_score_thresh", 0.06, 0.08)
-    box_nms_thresh = trail.suggest_float("box_nms_thresh", 0.2, 0.3)
+    scale = trail.suggest_float("scale", 0.3, 0.6)
+    shear = trail.suggest_float("shear", 0.0, 5.0)
+    rpn_nms_thresh = trail.suggest_float("rpn_nms_thresh", 0.2, 0.8)
+    box_score_thresh = trail.suggest_float("box_score_thresh", 0.01, 0.1)
+    box_nms_thresh = trail.suggest_float("box_nms_thresh", 0.1, 0.5)
 
     wandb.log({
         "parameters/num_epochs": num_epochs,
@@ -198,17 +197,17 @@ def objective(trail: optuna.Trial):
         "parameters/translate_y": translate_y,
         "parameters/scale": scale,
         "parameters/shear": shear,
-        "parameters/flipud": flipud,
     })
 
+    width = 4096
+    height = 512
     transform = A.Compose([
-        A.Resize(4096, 512),
+        A.Resize(width, height),
         A.HorizontalFlip(p=0.5),
-        A.VerticalFlip(p=flipud),
         A.ColorJitter(brightness=brightness, contrast=contrast, saturation=saturation, hue=hue),
         A.Affine(rotate=rotation, translate_percent={'x': translate_x, 'y': translate_y},
                  scale=(1.0 - scale, 1.0 + scale), shear=shear),
-        A.Perspective(p=0.00012),
+        A.Perspective(p=0.0001),
     ], bbox_params=A.BboxParams(format='yolo', label_fields=['labels']))
 
     train_img_dir = f"{DEVICE_PATH}/{USER_NAME}/computer-vision/data/rgb/images/train"
