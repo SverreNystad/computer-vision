@@ -6,15 +6,18 @@ import torchvision.ops as ops
 from torchvision.models.detection.rpn import AnchorGenerator
 from torchvision.models.detection import FasterRCNN
 
+def gn(c: int, num_groups: int = 8) -> nn.GroupNorm:
+    return nn.GroupNorm(num_groups=min(num_groups, c // 2), num_channels=c)
+
 class SveTimBackbone(nn.Module):
     def __init__(self, out_channels=256):
         super(SveTimBackbone, self).__init__()
         self.out_channels = out_channels
         self.c1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=1)
-        self.bn1 = nn.BatchNorm2d(64)
+        self.bn1 = gn(64)
         self.r1 = nn.ReLU()
         self.c2 = nn.Conv2d(64, 128, kernel_size=5, stride=2, padding=1)
-        self.bn2 = nn.BatchNorm2d(128)
+        self.bn2 = gn(128)
         self.r2 = nn.ReLU()
         self.c3 = nn.Conv2d(128, out_channels, kernel_size=3, stride=2, padding=1)
         self.r3 = nn.ReLU()

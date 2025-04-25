@@ -168,7 +168,7 @@ wandb_callback = WeightsAndBiasesCallback(wandb_kwargs=wandb_kwargs, as_multirun
 def objective(trail: optuna.Trial):
     should_save_images = False 
 
-    num_epochs = 50#trail.suggest_int("epochs", 1, 6000)
+    num_epochs = 5000#trail.suggest_int("epochs", 1, 6000)
     learning_rate = trail.suggest_float("lr", 0.0002, 0.0004, log=True)
     weight_decay = trail.suggest_float("weight_decay", 0.0004, 0.0006)
     brightness = trail.suggest_float("brightness", 0.35, 0.45)
@@ -226,7 +226,7 @@ def objective(trail: optuna.Trial):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = get_custom_detector(rpn_nms_thresh, box_score_thresh, box_nms_thresh) 
     model.to(device)
-    wandb.watch(model)
+    wandb.watch(model, log='all', log_freq=250)
 
     optimizer = optim.AdamW(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
 
@@ -361,7 +361,7 @@ def objective(trail: optuna.Trial):
             wandb.summary["true_images"] = wandb_true_images
 
         # print(f"Epoch {epoch+1}: mAP@0.5 = {results_map50['map']:.4f}, mAP@0.95 = {results_map95['map']:.4f}")
-        print(results_map50)
+        # print(results_map50)
         # Log epoch metrics to WANDB.
         wandb.log({
             "train/loss": avg_train_loss,
