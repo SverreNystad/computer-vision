@@ -127,7 +127,7 @@ def convert_box_format(boxes: torch.Tensor) -> torch.Tensor:
 
 
 def _batch_to_coco_dict(all_targets, all_preds, start_img_id=0):
-    coco_gt = {"images": [], "annotations": [], "categories": []}
+    coco_gt = {"images": [], "annotations": [], "categories": [{"id": 1, "name": "snow pole", "supercategory": "snow pole"}]}
     coco_dt = []
     ann_id = 0
     img_id = start_img_id
@@ -166,7 +166,7 @@ wandb_callback = WeightsAndBiasesCallback(wandb_kwargs=wandb_kwargs, as_multirun
 
 @wandb_callback.track_in_wandb()
 def objective(trail: optuna.Trial):
-    should_save_images = True 
+    should_save_images = False 
 
     num_epochs = 50#trail.suggest_int("epochs", 1, 6000)
     learning_rate = trail.suggest_float("lr", 0.0002, 0.0004, log=True)
@@ -320,19 +320,41 @@ def objective(trail: optuna.Trial):
         results_map95 = metric_map95.compute()
 
         coco_gt_dict, coco_dt_list, _ = _batch_to_coco_dict(all_targets_coco, all_preds_coco, 0)
+        #print(f"{coco_gt_dict=}")
+        #print(f"{coco_dt_list=}")
 
-        coco_gt = COCO()
-        coco_gt.dataset = coco_gt_dict
-        coco_gt.createIndex()
+        best_precision = 0.0
+        best_recall = 0.0
 
-        coco_dt = coco_gt.loadRes(coco_dt_list)
-        
-        coco_eval = COCOeval(coco_gt, coco_dt, iouType="bbox")
-        coco_eval.evaluate()
-        coco_eval.accumulate()
-        coco_eval.summarize()
+        if len(coco_dt_list) != 0:
+            coco_gt = COCO()
+            coco_gt.dataset = coco_gt_dict
+            coco_gt.createIndex()
 
-
+            coco_dt = coco_gt.loadRes(coco_dt_list)
+            
+            coco_eval = COCOeval(coco_gt, coco_dt, iouType="bbox")
+            coco_eval.evaluate()
+            coco_eval.accumulate()
+            
+            precision = coco_eval.eval["precision"]
+            recall = coco_eval.eval["precision"]
+            
+            rec_thrs = coco_eval.params.recThrs # np.linspace(0.0, 1.0, 101)
+            iou_thrs = coco_eval.params.iouThrs # np.linspace(0.5, 0.95, 10)
+            area_rng = coco_eval.params.areaRng # [0,1e10], [0,32^2], [32^2,96^2], [96^2,1e10]]
+            max_dets = coco_eval.params.maxDets # [1, 10, 100]
+            iou_idx = np.where(np.isclose(iou_thrs, 0.5))[0][0]
+            cat_idx = 0
+            area_idx = coco_eval.params.areaRngLbl.index('all')
+            maxdet_idx = max_dets.index(100)
+            prec_curve = precision[iou_idx, :, cat_idx, area_idx, maxdet_idx]
+            recall_val = recall[iou_idx, cat_idx, area_idx, maxdet_idx]
+            rec_thrs = coco_eval.params.recThrs
+            f1_scores = 2 * (prec_curve * rec_thrs) / (prec_curve + rec_thrs + 1e-16)
+            best_idx = np.nanargmax(f1_scores)
+            best_precision = prec_curve[best_idx]
+            best_recall    = rec_thrs[best_idx]
 
         if should_save_images:
             wandb.summary["predicted_images"] = wandb_pred_images
@@ -346,6 +368,8 @@ def objective(trail: optuna.Trial):
             "val/loss": avg_val_loss,
             "metrics/mAP50": results_map50["map"],
             "metrics/mAP95": results_map95["map"],
+            "metrics/precision": best_precision,
+            "metrics/recall": best_recall,
         })
 
         # Save final epoch’s mAP@0.95 to be returned as the objective value.

@@ -122,8 +122,8 @@ def get_custom_detector(rpn_nms_thresh, box_score_thresh, box_nms_thresh):
     predictor = SveTimPredictor(in_channels=head.out_channels, num_classes=2)
 
     anchor_generator = AnchorGenerator(
-        sizes=((16, 32, 64, 128, 256),),  # Adjust sizes if objects are smaller in your images.
-        aspect_ratios=((0.25, 0.33, 0.5, 1.0, 2.0),)  # Include more extreme vertical ratios.
+        sizes=((4, 8, 16, 32, 64, 128, 256),),  # Adjust sizes if objects are smaller in your images.
+        aspect_ratios=((0.1, 0.25, 0.33, 0.5, 1.0, 2.0),)  # Include more extreme vertical ratios.
     )
 
     rpn_head = SveTimRPNHead(in_channels=backbone.out_channels, num_anchors=anchor_generator.num_anchors_per_location()[0])
