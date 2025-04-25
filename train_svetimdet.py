@@ -27,7 +27,7 @@ import itertools, json, tempfile
 import numpy as np
 
 load_dotenv()
-STUDY_NAME = "cv-svetimdet-test"
+STUDY_NAME = "cv-svetimdet-v7"
 
 # Setup environment and wandb directories
 USER_NAME = getpass.getuser()
@@ -202,7 +202,7 @@ def objective(trail: optuna.Trial):
     })
 
     transform = A.Compose([
-        A.Resize(1024, 1024),
+        A.Resize(4096, 512),
         A.HorizontalFlip(p=0.5),
         A.VerticalFlip(p=flipud),
         A.ColorJitter(brightness=brightness, contrast=contrast, saturation=saturation, hue=hue),

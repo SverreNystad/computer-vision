@@ -3,7 +3,7 @@ DATASET_PATH="/cluster/projects/vc/data/ad/open/Poles"
 echo "Dataset path: $DATASET_PATH"
 
 # Define destination directories
-DEST_DIR="/cluster/work/sverrnys/computer-vision/data"
+DEST_DIR="/cluster/work/$USER/computer-vision/data"
 
 COMBINED_DIR="$DEST_DIR/combined"
 
