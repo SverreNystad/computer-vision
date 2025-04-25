@@ -21,9 +21,13 @@ import albumentations as A
 from albumentations.pytorch import ToTensorV2
 import numpy as np
 from svetim_detector import get_custom_detector
+from pycocotools.coco import COCO
+from pycocotools.cocoeval import COCOeval
+import itertools, json, tempfile
+import numpy as np
 
 load_dotenv()
-STUDY_NAME = "cv-svetimdet-v6"
+STUDY_NAME = "cv-svetimdet-test"
 
 # Setup environment and wandb directories
 USER_NAME = getpass.getuser()
@@ -121,12 +125,48 @@ def convert_box_format(boxes: torch.Tensor) -> torch.Tensor:
     ymax = y_center + h / 2
     return torch.stack([xmin, ymin, xmax, ymax], dim=-1)
 
+
+def _batch_to_coco_dict(all_targets, all_preds, start_img_id=0):
+    coco_gt = {"images": [], "annotations": [], "categories": []}
+    coco_dt = []
+    ann_id = 0
+    img_id = start_img_id
+
+    for tgt, pred in zip(all_targets, all_preds):
+        coco_gt["images"].append({"id": img_id})
+
+        for b, c in zip(tgt["boxes"], tgt["labels"]):
+            x1, y1, x2, y2 = b.tolist()
+            coco_gt["annotations"].append({
+                "id": ann_id,
+                "image_id": img_id,
+                "category_id": int(c),
+                "bbox": [x1, y1, x2 - x1, y2 - y1],
+                "iscrowd": 0,
+                "area": float((x2-x1) * (y2-y1)),
+            })
+            ann_id += 1
+
+        for b, c, s in zip(pred["boxes"], pred["labels"], pred["scores"]):
+            x1, y1, x2, y2 = b.tolist()
+            coco_dt.append({
+                "image_id": img_id,
+                "category_id": int(c),
+                "score": float(s),
+                "bbox": [x1, y1, x2-x1, y2-y1],
+            })
+
+        img_id += 1
+
+    return coco_gt, coco_dt, img_id
+
+
 wandb_kwargs = {"entity": "sverrenystad-ntnu", "project": STUDY_NAME}
 wandb_callback = WeightsAndBiasesCallback(wandb_kwargs=wandb_kwargs, as_multirun=True)
 
 @wandb_callback.track_in_wandb()
 def objective(trail: optuna.Trial):
-    should_save_images = False 
+    should_save_images = True 
 
     num_epochs = 50#trail.suggest_int("epochs", 1, 6000)
     learning_rate = trail.suggest_float("lr", 0.0002, 0.0004, log=True)
@@ -230,6 +270,8 @@ def objective(trail: optuna.Trial):
         # Precision
         all_preds = []
         all_targets = []
+        all_preds_coco = []
+        all_targets_coco = []
         wandb_true_images = []
         wandb_pred_images = []
 
@@ -249,7 +291,6 @@ def objective(trail: optuna.Trial):
                     all_preds.append(pred)
                     all_targets.append(gt) 
 
-
                 if should_save_images:
                     predicted_images = []
                     true_images = []
@@ -266,10 +307,32 @@ def objective(trail: optuna.Trial):
                     wandb_true_images.append(wandb.Image(true_imgs, caption="True boxes and labels"))
                     wandb_pred_images.append(wandb.Image(pred_imgs, caption="Predicted boxes and labels"))
 
+                preds = [{k: v.cpu() for k, v in p.items()} for p in predictions]
+                gts = [{k: v.cpu() for k,v in t.items()} for t in targets]
+
+                all_preds_coco.extend(preds)
+                all_targets_coco.extend(gts)
+
+
         metric_map50.update(all_preds, all_targets)
         metric_map95.update(all_preds, all_targets)
         results_map50 = metric_map50.compute()
         results_map95 = metric_map95.compute()
+
+        coco_gt_dict, coco_dt_list, _ = _batch_to_coco_dict(all_targets_coco, all_preds_coco, 0)
+
+        coco_gt = COCO()
+        coco_gt.dataset = coco_gt_dict
+        coco_gt.createIndex()
+
+        coco_dt = coco_gt.loadRes(coco_dt_list)
+        
+        coco_eval = COCOeval(coco_gt, coco_dt, iouType="bbox")
+        coco_eval.evaluate()
+        coco_eval.accumulate()
+        coco_eval.summarize()
+
+
 
         if should_save_images:
             wandb.summary["predicted_images"] = wandb_pred_images
