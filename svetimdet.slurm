@@ -21,29 +21,11 @@ echo "Name of job: $SLURM_JOB_NAME"
 echo "ID of job: $SLURM_JOB_ID"
 echo "The job was run on these nodes: $SLURM_JOB_NODELIST"
 
-ENV_PATH="/cluster/work/$USER/computer-vision/cv-env/"
-
 module purge
-module load Anaconda3/2024.02-1
+module load Python/3.10.8-GCCcore-12.2.0
+module load CUDA/12.6.0
 
-# Create a new Conda environment
-conda create -y --prefix ${ENV_PATH} python=3.10
+source .venv/bin/activate
 
-# Activate the environment
-conda activate ${ENV_PATH}
-pip install -r requirements.txt
-
-echo "Downloaded dependencies:"
-pip freeze
-
-# Enable W&B logging for Ultralytics
-yolo settings wandb=True
-
-
-# Run the Python script
 python train_svetimdet.py
 
-# Deactivate the environment
-conda deactivate
-
-echo "Job finished"
