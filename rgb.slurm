@@ -40,7 +40,7 @@ yolo settings wandb=True
 
 
 # Run the Python script
-python train-combined-albumentations.py
+python train-rgb-albumentations.py
 
 # Deactivate the environment
 conda deactivate
