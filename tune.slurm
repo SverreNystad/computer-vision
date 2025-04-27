@@ -2,7 +2,7 @@
 #SBATCH --job-name="computer-vision-snow-poles"
 #SBATCH --mail-user=tim.matras@ntnu.no
 #SBATCH --mail-type=FAIL,END,TIME_LIMIT
-#SBATCH --array=1-10
+#SBATCH --array=1
 #SBATCH --output=slurm_logs/slurm-job-%A_%a-%j.log   # assumes --array jobs
 #SBATCH --error=slurm_logs/slurm-job-%A_%a-%j.err   # assumes --array jobs
 #SBATCH --account=share-ie-idi    # ie-idi shareholder account, high priority
@@ -27,5 +27,5 @@ module load CUDA/12.6.0
 
 source .venv/bin/activate
 
-python train_svetimdet.py
+python tuning.py
 
