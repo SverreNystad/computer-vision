@@ -3,7 +3,7 @@ import os
 import getpass
 
 # Load the small YOLOv11 model
-model = YOLO("yolov11s.pt")
+model = YOLO("yolo11s.yaml")
 USER_NAME = getpass.getuser()
 
 DEVICE_PATH = os.getenv("DEVICE_PATH") or "/work"
@@ -25,7 +25,7 @@ search_space = {
 
 # Run hyperparameter tuning (genetic algorithm) for augmented YOLO training
 results = model.tune(
-    data=f"{DEVICE_PATH}/{USER_NAME}/computer-vision/data/data-combined.yaml",
+    data=f"{DEVICE_PATH}/{USER_NAME}/computer-vision/data/data-rgb.yaml",
     epochs=50,  # number of training epochs per trial
     iterations=200,  # number of hyperparameter samples/trials
     optimizer="AdamW",  # optimizer to use during tuning
@@ -34,6 +34,8 @@ results = model.tune(
     save=True,  # save best hyperparameters
     val=True,  # run validation every epoch
     project="runs/tune-snow",  # where to store tuning runs
+    resume=True,
+    imgsz=1920,
 )
 
 print("Tuning complete. Best hyperparameters:\n", results)
