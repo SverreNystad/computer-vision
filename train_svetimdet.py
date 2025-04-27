@@ -76,24 +76,33 @@ class OurDataset(Dataset):
         self.transform = transform
         self.img_files = sorted([f for f in os.listdir(self.img_dir) if f.lower().endswith((".jpg", ".png"))])
 
+        self._images = []
+        self._labels = []  # list of tuples (boxes, labels)
+
+        for fname in self.img_files:
+            # -- image --
+            img_path = os.path.join(image_dir, fname)
+            img = Image.open(img_path).convert("RGB")
+            arr = np.array(img, dtype=np.uint8)
+            self._images.append(arr)
+
+            # -- labels --
+            label_fname = os.path.splitext(fname)[0] + ".txt"
+            label_path = os.path.join(label_dir, label_fname)
+            boxes, labels = [], []
+            with open(label_path, "r") as f:
+                for line in f:
+                    parts = line.strip().split()
+                    labels.append(int(parts[0]) + 1)
+                    boxes.append(list(map(float, parts[1:])))
+            self._labels.append((boxes, labels))
+
     def __len__(self):
-        return len(self.img_files)
+        return len(self._images)
 
     def __getitem__(self, idx):
-        img_file = self.img_files[idx]
-        img_path = os.path.join(self.img_dir, img_file)
-        label_file = os.path.splitext(img_file)[0] + ".txt"
-        label_path = os.path.join(self.label_dir, label_file)
-
-        img = np.array(Image.open(img_path).convert("RGB"), dtype=np.uint8)
-
-        boxes = []
-        labels = []
-        with open(label_path, "r") as f:
-            for line in f:
-                parts = line.strip().split()
-                labels.append(int(parts[0])+1)
-                boxes.append(list(map(float, parts[1:])))
+        img = self._images[idx]
+        boxes, labels = self._labels[idx]
 
         transformed = self.transform(image=img, bboxes=boxes, labels=labels)
         img = transformed["image"]
@@ -168,7 +177,7 @@ wandb_callback = WeightsAndBiasesCallback(wandb_kwargs=wandb_kwargs, as_multirun
 def objective(trail: optuna.Trial):
     should_save_images = False 
 
-    num_epochs = 5000#trail.suggest_int("epochs", 1, 6000)
+    num_epochs = 200#trail.suggest_int("epochs", 1, 6000)
     learning_rate = trail.suggest_float("lr", 0.0001, 0.001, log=True)
     weight_decay = trail.suggest_float("weight_decay", 0.0001, 0.001)
     brightness = trail.suggest_float("brightness", 0.3, 0.5)
