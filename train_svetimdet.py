@@ -27,7 +27,7 @@ import itertools, json, tempfile
 import numpy as np
 
 load_dotenv()
-STUDY_NAME = "cv-svetimdet-v7"
+STUDY_NAME = "cv-svetimdet-hyperparameter"
 
 # Setup environment and wandb directories
 USER_NAME = getpass.getuser()
