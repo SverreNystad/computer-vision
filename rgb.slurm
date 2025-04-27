@@ -5,7 +5,7 @@
 #SBATCH --partition=GPUQ
 #SBATCH --gres=gpu:1
 #SBATCH --mem=32GB
-#SBATCH --nodes=4
+#SBATCH --nodes=1
 #SBATCH --constraint="(v100|a100|h100)&(gpu32g|gpu40g|gpu80g)"
 #SBATCH --output=slurm_outputs/output_combined.txt
 #SBATCH --error=slurm_outputs/output_combined.err
