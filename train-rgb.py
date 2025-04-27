@@ -33,30 +33,18 @@ wandb.login(key=WANDB_API_KEY)
 
 def objective(trial: optuna.Trial):
 
-    # Basic parameters
-    epochs = trial.suggest_int("epochs", 1, 3000)
-
     # From the YOLO default search space
-    lr0 = trial.suggest_float("lr0", 1e-5, 1e-1, log=True)
-    lrf = trial.suggest_float("lrf", 0.01, 1.0)
-    momentum = trial.suggest_float("momentum", 0.6, 0.98)
-    weight_decay = trial.suggest_float("weight_decay", 0.0, 0.001)
-    warmup_epochs = trial.suggest_float("warmup_epochs", 0.0, 5.0)
-    warmup_momentum = trial.suggest_float("warmup_momentum", 0.0, 0.95)
-    box = trial.suggest_float("box", 0.02, 0.2)
-    cls = trial.suggest_float("cls", 0.2, 4.0)
-    hsv_h = trial.suggest_float("hsv_h", 0.0, 0.1)
-    hsv_s = trial.suggest_float("hsv_s", 0.0, 0.9)
-    hsv_v = trial.suggest_float("hsv_v", 0.0, 0.9)
-    degrees = trial.suggest_float("degrees", 0.0, 45.0)
-    translate = trial.suggest_float("translate", 0.0, 0.9)
-    scale = trial.suggest_float("scale", 0.0, 0.9)
-    shear = trial.suggest_float("shear", 0.0, 10.0)
+    hsv_h = trial.suggest_float("hsv_h", 0.015, 0.03)
+    hsv_s = trial.suggest_float("hsv_s", 0.5, 0.7)
+    hsv_v = trial.suggest_float("hsv_v", 0.3, 0.5)
+    degrees = trial.suggest_float("degrees", 5.0, 15.0)
+    translate = trial.suggest_float("translate", 0.0, 0.2)
+    scale = trial.suggest_float("scale", 0.3, 0.6)
+    shear = trial.suggest_float("shear", 0.0, 5.0)
     perspective = trial.suggest_float("perspective", 0.0, 0.001)
-    flipud = trial.suggest_float("flipud", 0.0, 1.0)
-    fliplr = trial.suggest_float("fliplr", 0.0, 1.0)
+    fliplr = 0.5
     mosaic = trial.suggest_float("mosaic", 0.0, 1.0)
-    mixup = trial.suggest_float("mixup", 0.0, 1.0)
+    mixup = trial.suggest_float("mixup", 0.0, 0.2)
     copy_paste = trial.suggest_float("copy_paste", 0.0, 1.0)
 
     # Initialize model
@@ -65,16 +53,8 @@ def objective(trial: optuna.Trial):
     # Train model with the sampled hyperparameters
     model.train(
         data=f"/work/{USER_NAME}/computer-vision/data/data-rgb.yaml",
-        project="cv-rgb-small",
-        epochs=epochs,
-        lr0=lr0,
-        lrf=lrf,
-        momentum=momentum,
-        weight_decay=weight_decay,
-        warmup_epochs=warmup_epochs,
-        warmup_momentum=warmup_momentum,
-        box=box,
-        cls=cls,
+        project="cv-rgb-small-resize",
+        epochs=70,
         hsv_h=hsv_h,
         hsv_s=hsv_s,
         hsv_v=hsv_v,
@@ -83,11 +63,10 @@ def objective(trial: optuna.Trial):
         scale=scale,
         shear=shear,
         perspective=perspective,
-        flipud=flipud,
         fliplr=fliplr,
         mosaic=mosaic,
         mixup=mixup,
-        copy_paste=copy_paste,
+        imgsz=1920,
     )
 
     # Validate and retrieve metrics
@@ -132,6 +111,6 @@ def main(study_name: str):
         emmisions = tracker.stop()
 
 if __name__ == "__main__":
-   study_name = "lidar_yolo_epochs"
+   study_name = "rgb_yolo_epochs"
    main(study_name)
    # run_server(study_name)
