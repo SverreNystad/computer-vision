@@ -1,0 +1,19 @@
+# 200/200 iterations complete ✅ (18648.14s)
+# Results saved to runs/tune-snow/tune4
+# Best fitness=0.20487 observed at iteration 145
+# Best fitness metrics are {'metrics/precision(B)': 0.5702, 'metrics/recall(B)': 0.59292, 'metrics/mAP50(B)': 0.55417, 'metrics/mAP50-95(B)': 0.16605, 'val/box_loss': 2.08374, 'val/cls_loss': 1.50438, 'val/dfl_loss': 1.16025, 'fitness': 0.20487}
+# Best fitness model is runs/tune-snow/train148
+# Best fitness hyperparameters are printed below.
+
+hsv_h: 0.015
+hsv_s: 0.63724
+hsv_v: 0.43541
+degrees: 5.0
+translate: 0.1
+scale: 0.56284
+shear: 0.0
+perspective: 0.0
+fliplr: 0.5
+flipud: 0.0
+mosaic: 1.0
+mixup: 0.0

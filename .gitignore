@@ -11,7 +11,8 @@ cv-lidar/*
 cv-rgb-small/*
 cv-combined-small/
 data/combined/
-
+*.pth
+*.swp
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
