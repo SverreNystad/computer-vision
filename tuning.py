@@ -45,14 +45,16 @@ search_space = {
 # Run hyperparameter tuning (genetic algorithm) for augmented YOLO training
 results = model.tune(
     data=f"{DEVICE_PATH}/{USER_NAME}/computer-vision/data/data-rgb.yaml",
-    epochs=70,  # number of training epochs per trial
-    iterations=1500,  # number of hyperparameter samples/trials
+    epochs=50,  # number of training epochs per trial
+    iterations=200,  # number of hyperparameter samples/trials
     optimizer="AdamW",  # optimizer to use during tuning
     space=search_space,  # custom search space defined above
     plots=True,  # generate loss/metric plots
     save=True,  # save best hyperparameters
     val=True,  # run validation every epoch
     project="runs/tune-snow",  # where to store tuning runs
+    resume=True,
+    imgsz=1920,
 )
 
 print("Tuning complete. Best hyperparameters:\n", results)
