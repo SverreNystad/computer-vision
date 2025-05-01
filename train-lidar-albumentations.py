@@ -1,16 +1,23 @@
 import os
 import getpass
 
+from dotenv import load_dotenv
 USER_NAME = getpass.getuser()
+load_dotenv()
 
-os.environ["WANDB_DIR"] = f"/work/{USER_NAME}/"
-os.environ["WANDB_CACHE_DIR"] = f"/work/{USER_NAME}/.cache/"
-os.environ["WANDB_CONFIG_DIR"] = f"/work/{USER_NAME}/.config/wandb"
-os.environ["WANDB_DATA_DIR"] = f"/work/{USER_NAME}/.cache/wandb-data/"
-os.environ["WANDB_ARTIFACT_DIR"] = f"/work/{USER_NAME}/artifacts"
+
+DEVICE_PATH = os.getenv("DEVICE_PATH") or "/work"
+os.environ["WANDB_DIR"] = f"{DEVICE_PATH}/{USER_NAME}/"
+os.environ["WANDB_CACHE_DIR"] = f"{DEVICE_PATH}/{USER_NAME}/.cache/"
+os.environ["WANDB_CONFIG_DIR"] = f"{DEVICE_PATH}/{USER_NAME}/.config/wandb"
+os.environ["WANDB_DATA_DIR"] = f"{DEVICE_PATH}/{USER_NAME}/.cache/wandb-data/"
+os.environ["WANDB_ARTIFACT_DIR"] = f"{DEVICE_PATH}/{USER_NAME}/artifacts"
 
 if not os.path.exists(os.getenv("WANDB_CONFIG_DIR")):
     os.makedirs(os.getenv("WANDB_CONFIG_DIR"))
+
+import wandb
+
 
 import logging
 import sys
@@ -22,7 +29,6 @@ import wandb
 from dotenv import load_dotenv
 import os
 
-load_dotenv()
 
 
 WANDB_API_KEY = os.getenv("WANDB_API_KEY")
@@ -44,7 +50,7 @@ def objective(trial: optuna.Trial):
     # Train model with the sampled hyperparameters
     # Run hyperparameter tuning (genetic algorithm) for augmented YOLO training
     results = model.train(
-        data=f"/work/{USER_NAME}/computer-vision/data/data-lidar.yaml",
+        data=f"{DEVICE_PATH}/{USER_NAME}/computer-vision/data/data-lidar.yaml",
         epochs=epochs,  # number of training epochs per trial
         project="cv-rgb-lidar-albuations",
         imgsz=imgsz,
