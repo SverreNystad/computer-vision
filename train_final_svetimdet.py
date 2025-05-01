@@ -26,7 +26,7 @@ import itertools, json, tempfile
 import numpy as np
 
 load_dotenv()
-STUDY_NAME = "cv-svetimdet-final"
+STUDY_NAME = "cv-svetimdet-final-combined"
 
 # Setup environment and wandb directories
 USER_NAME = getpass.getuser()
@@ -214,10 +214,10 @@ def objective():
         A.Perspective(p=0.0001),
     ], bbox_params=A.BboxParams(format='yolo', label_fields=['labels']))
 
-    train_img_dir = f"{DEVICE_PATH}/{USER_NAME}/computer-vision/data/rgb/images/train"
-    train_label_dir = f"{DEVICE_PATH}/{USER_NAME}/computer-vision/data/rgb/labels/train"
-    val_img_dir = f"{DEVICE_PATH}/{USER_NAME}/computer-vision/data/rgb/images/valid"
-    val_label_dir = f"{DEVICE_PATH}/{USER_NAME}/computer-vision/data/rgb/labels/valid"
+    train_img_dir = f"{DEVICE_PATH}/{USER_NAME}/computer-vision/data/combined/images/train"
+    train_label_dir = f"{DEVICE_PATH}/{USER_NAME}/computer-vision/data/combined/labels/train"
+    val_img_dir = f"{DEVICE_PATH}/{USER_NAME}/computer-vision/data/combined/images/valid"
+    val_label_dir = f"{DEVICE_PATH}/{USER_NAME}/computer-vision/data/combined/labels/valid"
 
     train_dataset = OurDataset(train_img_dir, train_label_dir, transform=transform)
     val_dataset = OurDataset(val_img_dir, val_label_dir, transform=transform)
@@ -365,8 +365,8 @@ def objective():
 
         if (epoch+1) % 1 == 100:
             wandb.unwatch()
-            torch.save(model, f"./svetimdet/checkpoint_{epoch+1}.pt")
-            wandb.save(f"./svetimdet/checkpoint_{epoch+1}.pt")
+            torch.save(model, f"./{STUDY_NAME}/checkpoint_{epoch+1}.pt")
+            wandb.save(f"./{STUDY_NAME}/checkpoint_{epoch+1}.pt")
             wandb.watch(model, log='all', log_freq=250)
 
         # print(f"Epoch {epoch+1}: mAP@0.5 = {results_map50['map']:.4f}, mAP@0.95 = {results_map95['map']:.4f}")
@@ -389,7 +389,7 @@ def objective():
             best_val_loss = avg_val_loss
         print(f"Epoch {epoch + 1}/{num_epochs}: Train {avg_train_loss:.4f}, Val {avg_val_loss:.4f}, mAP@0.5 = {results_map50['map']:.4f}, mAP@0.95 = {results_map95['map']:.4f}")
 
-    torch.save(model, "svetim_det.pt")
+    torch.save(model, "./{STUDY_NAME}/svetim_det.pt")
 
     return final_map95, final_map50
 
