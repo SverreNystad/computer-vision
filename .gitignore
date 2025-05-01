@@ -13,6 +13,8 @@ cv-combined-small/
 data/combined/
 *.pth
 *.swp
+cv-env/
+slurm_logs/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

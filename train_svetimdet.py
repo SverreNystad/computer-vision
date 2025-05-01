@@ -21,9 +21,13 @@ import albumentations as A
 from albumentations.pytorch import ToTensorV2
 import numpy as np
 from svetim_detector import get_custom_detector
+from pycocotools.coco import COCO
+from pycocotools.cocoeval import COCOeval
+import itertools, json, tempfile
+import numpy as np
 
 load_dotenv()
-STUDY_NAME = "cv-svetimdet-v6"
+STUDY_NAME = "cv-svetimdet-hyperparameter"
 
 # Setup environment and wandb directories
 USER_NAME = getpass.getuser()
@@ -72,24 +76,33 @@ class OurDataset(Dataset):
         self.transform = transform
         self.img_files = sorted([f for f in os.listdir(self.img_dir) if f.lower().endswith((".jpg", ".png"))])
 
+        self._images = []
+        self._labels = []  # list of tuples (boxes, labels)
+
+        for fname in self.img_files:
+            # -- image --
+            img_path = os.path.join(image_dir, fname)
+            img = Image.open(img_path).convert("RGB")
+            arr = np.array(img, dtype=np.uint8)
+            self._images.append(arr)
+
+            # -- labels --
+            label_fname = os.path.splitext(fname)[0] + ".txt"
+            label_path = os.path.join(label_dir, label_fname)
+            boxes, labels = [], []
+            with open(label_path, "r") as f:
+                for line in f:
+                    parts = line.strip().split()
+                    labels.append(int(parts[0]) + 1)
+                    boxes.append(list(map(float, parts[1:])))
+            self._labels.append((boxes, labels))
+
     def __len__(self):
-        return len(self.img_files)
+        return len(self._images)
 
     def __getitem__(self, idx):
-        img_file = self.img_files[idx]
-        img_path = os.path.join(self.img_dir, img_file)
-        label_file = os.path.splitext(img_file)[0] + ".txt"
-        label_path = os.path.join(self.label_dir, label_file)
-
-        img = np.array(Image.open(img_path).convert("RGB"), dtype=np.uint8)
-
-        boxes = []
-        labels = []
-        with open(label_path, "r") as f:
-            for line in f:
-                parts = line.strip().split()
-                labels.append(int(parts[0])+1)
-                boxes.append(list(map(float, parts[1:])))
+        img = self._images[idx]
+        boxes, labels = self._labels[idx]
 
         transformed = self.transform(image=img, bboxes=boxes, labels=labels)
         img = transformed["image"]
@@ -121,6 +134,42 @@ def convert_box_format(boxes: torch.Tensor) -> torch.Tensor:
     ymax = y_center + h / 2
     return torch.stack([xmin, ymin, xmax, ymax], dim=-1)
 
+
+def _batch_to_coco_dict(all_targets, all_preds, start_img_id=0):
+    coco_gt = {"images": [], "annotations": [], "categories": [{"id": 1, "name": "snow pole", "supercategory": "snow pole"}]}
+    coco_dt = []
+    ann_id = 0
+    img_id = start_img_id
+
+    for tgt, pred in zip(all_targets, all_preds):
+        coco_gt["images"].append({"id": img_id})
+
+        for b, c in zip(tgt["boxes"], tgt["labels"]):
+            x1, y1, x2, y2 = b.tolist()
+            coco_gt["annotations"].append({
+                "id": ann_id,
+                "image_id": img_id,
+                "category_id": int(c),
+                "bbox": [x1, y1, x2 - x1, y2 - y1],
+                "iscrowd": 0,
+                "area": float((x2-x1) * (y2-y1)),
+            })
+            ann_id += 1
+
+        for b, c, s in zip(pred["boxes"], pred["labels"], pred["scores"]):
+            x1, y1, x2, y2 = b.tolist()
+            coco_dt.append({
+                "image_id": img_id,
+                "category_id": int(c),
+                "score": float(s),
+                "bbox": [x1, y1, x2-x1, y2-y1],
+            })
+
+        img_id += 1
+
+    return coco_gt, coco_dt, img_id
+
+
 wandb_kwargs = {"entity": "sverrenystad-ntnu", "project": STUDY_NAME}
 wandb_callback = WeightsAndBiasesCallback(wandb_kwargs=wandb_kwargs, as_multirun=True)
 
@@ -128,22 +177,21 @@ wandb_callback = WeightsAndBiasesCallback(wandb_kwargs=wandb_kwargs, as_multirun
 def objective(trail: optuna.Trial):
     should_save_images = False 
 
-    num_epochs = 50#trail.suggest_int("epochs", 1, 6000)
-    learning_rate = trail.suggest_float("lr", 0.0002, 0.0004, log=True)
-    weight_decay = trail.suggest_float("weight_decay", 0.0004, 0.0006)
-    brightness = trail.suggest_float("brightness", 0.35, 0.45)
-    hue = trail.suggest_float("hue", 0.175, 0.225)
-    saturation = trail.suggest_float("saturation", 0.1, 0.15)
-    contrast = trail.suggest_float("contrast", 0.5, 0.6)
-    rotation = trail.suggest_float("rotation", 14.0, 16.0)
-    translate_x = trail.suggest_float("translate_x", 0.1, 0.15)
+    num_epochs = 200#trail.suggest_int("epochs", 1, 6000)
+    learning_rate = trail.suggest_float("lr", 0.0001, 0.001, log=True)
+    weight_decay = trail.suggest_float("weight_decay", 0.0001, 0.001)
+    brightness = trail.suggest_float("brightness", 0.3, 0.5)
+    hue = trail.suggest_float("hue", 0.015, 0.03)
+    saturation = trail.suggest_float("saturation", 0.5, 0.7)
+    contrast = trail.suggest_float("contrast", 0.2, 0.8)
+    rotation = trail.suggest_float("rotation", 5.0, 15.0)
+    translate_x = trail.suggest_float("translate_x", 0.1, 0.2)
     translate_y = trail.suggest_float("translate_y", 0.1, 0.2)
-    scale = trail.suggest_float("scale", 0.05, 0.15)
-    shear = trail.suggest_float("shear", 4.0, 5.0)
-    flipud = trail.suggest_float("flipud", 0.4, 0.5)
-    rpn_nms_thresh = trail.suggest_float("rpn_nms_thresh", 0.625, 0.725)
-    box_score_thresh = trail.suggest_float("box_score_thresh", 0.06, 0.08)
-    box_nms_thresh = trail.suggest_float("box_nms_thresh", 0.2, 0.3)
+    scale = trail.suggest_float("scale", 0.3, 0.6)
+    shear = trail.suggest_float("shear", 0.0, 5.0)
+    rpn_nms_thresh = trail.suggest_float("rpn_nms_thresh", 0.2, 0.8)
+    box_score_thresh = trail.suggest_float("box_score_thresh", 0.01, 0.1)
+    box_nms_thresh = trail.suggest_float("box_nms_thresh", 0.1, 0.5)
 
     wandb.log({
         "parameters/num_epochs": num_epochs,
@@ -158,17 +206,17 @@ def objective(trail: optuna.Trial):
         "parameters/translate_y": translate_y,
         "parameters/scale": scale,
         "parameters/shear": shear,
-        "parameters/flipud": flipud,
     })
 
+    width = 4096
+    height = 512
     transform = A.Compose([
-        A.Resize(1024, 1024),
+        A.Resize(width, height),
         A.HorizontalFlip(p=0.5),
-        A.VerticalFlip(p=flipud),
         A.ColorJitter(brightness=brightness, contrast=contrast, saturation=saturation, hue=hue),
         A.Affine(rotate=rotation, translate_percent={'x': translate_x, 'y': translate_y},
                  scale=(1.0 - scale, 1.0 + scale), shear=shear),
-        A.Perspective(p=0.00012),
+        A.Perspective(p=0.0001),
     ], bbox_params=A.BboxParams(format='yolo', label_fields=['labels']))
 
     train_img_dir = f"{DEVICE_PATH}/{USER_NAME}/computer-vision/data/rgb/images/train"
@@ -186,7 +234,7 @@ def objective(trail: optuna.Trial):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = get_custom_detector(rpn_nms_thresh, box_score_thresh, box_nms_thresh) 
     model.to(device)
-    wandb.watch(model)
+    wandb.watch(model, log='all', log_freq=250)
 
     optimizer = optim.AdamW(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
 
@@ -230,6 +278,8 @@ def objective(trail: optuna.Trial):
         # Precision
         all_preds = []
         all_targets = []
+        all_preds_coco = []
+        all_targets_coco = []
         wandb_true_images = []
         wandb_pred_images = []
 
@@ -249,7 +299,6 @@ def objective(trail: optuna.Trial):
                     all_preds.append(pred)
                     all_targets.append(gt) 
 
-
                 if should_save_images:
                     predicted_images = []
                     true_images = []
@@ -266,23 +315,69 @@ def objective(trail: optuna.Trial):
                     wandb_true_images.append(wandb.Image(true_imgs, caption="True boxes and labels"))
                     wandb_pred_images.append(wandb.Image(pred_imgs, caption="Predicted boxes and labels"))
 
+                preds = [{k: v.cpu() for k, v in p.items()} for p in predictions]
+                gts = [{k: v.cpu() for k,v in t.items()} for t in targets]
+
+                all_preds_coco.extend(preds)
+                all_targets_coco.extend(gts)
+
+
         metric_map50.update(all_preds, all_targets)
         metric_map95.update(all_preds, all_targets)
         results_map50 = metric_map50.compute()
         results_map95 = metric_map95.compute()
+
+        coco_gt_dict, coco_dt_list, _ = _batch_to_coco_dict(all_targets_coco, all_preds_coco, 0)
+        #print(f"{coco_gt_dict=}")
+        #print(f"{coco_dt_list=}")
+
+        best_precision = 0.0
+        best_recall = 0.0
+
+        if len(coco_dt_list) != 0:
+            coco_gt = COCO()
+            coco_gt.dataset = coco_gt_dict
+            coco_gt.createIndex()
+
+            coco_dt = coco_gt.loadRes(coco_dt_list)
+            
+            coco_eval = COCOeval(coco_gt, coco_dt, iouType="bbox")
+            coco_eval.evaluate()
+            coco_eval.accumulate()
+            
+            precision = coco_eval.eval["precision"]
+            recall = coco_eval.eval["precision"]
+            
+            rec_thrs = coco_eval.params.recThrs # np.linspace(0.0, 1.0, 101)
+            iou_thrs = coco_eval.params.iouThrs # np.linspace(0.5, 0.95, 10)
+            area_rng = coco_eval.params.areaRng # [0,1e10], [0,32^2], [32^2,96^2], [96^2,1e10]]
+            max_dets = coco_eval.params.maxDets # [1, 10, 100]
+            iou_idx = np.where(np.isclose(iou_thrs, 0.5))[0][0]
+            cat_idx = 0
+            area_idx = coco_eval.params.areaRngLbl.index('all')
+            maxdet_idx = max_dets.index(100)
+            prec_curve = precision[iou_idx, :, cat_idx, area_idx, maxdet_idx]
+            recall_val = recall[iou_idx, cat_idx, area_idx, maxdet_idx]
+            rec_thrs = coco_eval.params.recThrs
+            f1_scores = 2 * (prec_curve * rec_thrs) / (prec_curve + rec_thrs + 1e-16)
+            best_idx = np.nanargmax(f1_scores)
+            best_precision = prec_curve[best_idx]
+            best_recall    = rec_thrs[best_idx]
 
         if should_save_images:
             wandb.summary["predicted_images"] = wandb_pred_images
             wandb.summary["true_images"] = wandb_true_images
 
         # print(f"Epoch {epoch+1}: mAP@0.5 = {results_map50['map']:.4f}, mAP@0.95 = {results_map95['map']:.4f}")
-        print(results_map50)
+        # print(results_map50)
         # Log epoch metrics to WANDB.
         wandb.log({
             "train/loss": avg_train_loss,
             "val/loss": avg_val_loss,
             "metrics/mAP50": results_map50["map"],
             "metrics/mAP95": results_map95["map"],
+            "metrics/precision": best_precision,
+            "metrics/recall": best_recall,
         })
 
         # Save final epoch’s mAP@0.95 to be returned as the objective value.

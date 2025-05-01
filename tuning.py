@@ -1,6 +1,9 @@
 from ultralytics import YOLO
 import os
 import getpass
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # Load the small YOLOv11 model
 model = YOLO("yolo11s.yaml")
