@@ -50,7 +50,7 @@ def objective(trial: optuna.Trial):
     # Train model with the sampled hyperparameters
     # Run hyperparameter tuning (genetic algorithm) for augmented YOLO training
     results = model.train(
-        data=f"/work/{USER_NAME}/computer-vision/data/data-combined.yaml",
+        data=f"{DEVICE_PATH}/{USER_NAME}/computer-vision/data/data-combined.yaml",
         epochs=epochs,  # number of training epochs per trial
         project="cv-combined-albuations",
         imgsz=imgsz,
