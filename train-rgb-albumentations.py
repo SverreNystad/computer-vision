@@ -3,6 +3,7 @@ import getpass
 
 USER_NAME = getpass.getuser()
 
+from dotenv import load_dotenv
 load_dotenv()
 
 
@@ -29,8 +30,6 @@ from codecarbon import track_emissions, OfflineEmissionsTracker
 import wandb
 from dotenv import load_dotenv
 import os
-
-load_dotenv()
 
 
 WANDB_API_KEY = os.getenv("WANDB_API_KEY")

@@ -3,14 +3,20 @@ import getpass
 
 USER_NAME = getpass.getuser()
 
-os.environ["WANDB_DIR"] = f"/work/{USER_NAME}/"
-os.environ["WANDB_CACHE_DIR"] = f"/work/{USER_NAME}/.cache/"
-os.environ["WANDB_CONFIG_DIR"] = f"/work/{USER_NAME}/.config/wandb"
-os.environ["WANDB_DATA_DIR"] = f"/work/{USER_NAME}/.cache/wandb-data/"
-os.environ["WANDB_ARTIFACT_DIR"] = f"/work/{USER_NAME}/artifacts"
+from dotenv import load_dotenv
+load_dotenv()
+
+
+DEVICE_PATH = os.getenv("DEVICE_PATH") or "/work"
+os.environ["WANDB_DIR"] = f"{DEVICE_PATH}/{USER_NAME}/"
+os.environ["WANDB_CACHE_DIR"] = f"{DEVICE_PATH}/{USER_NAME}/.cache/"
+os.environ["WANDB_CONFIG_DIR"] = f"{DEVICE_PATH}/{USER_NAME}/.config/wandb"
+os.environ["WANDB_DATA_DIR"] = f"{DEVICE_PATH}/{USER_NAME}/.cache/wandb-data/"
+os.environ["WANDB_ARTIFACT_DIR"] = f"{DEVICE_PATH}/{USER_NAME}/artifacts"
 
 if not os.path.exists(os.getenv("WANDB_CONFIG_DIR")):
     os.makedirs(os.getenv("WANDB_CONFIG_DIR"))
+
 
 import logging
 import sys
