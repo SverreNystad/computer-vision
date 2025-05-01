@@ -363,9 +363,11 @@ def objective():
             wandb.summary["predicted_images"] = wandb_pred_images
             wandb.summary["true_images"] = wandb_true_images
 
-        if (epoch+1) % 100 == 0:
+        if (epoch+1) % 1 == 0:
+            wandb.unwatch()
             torch.save(model, f"./svetimdet/checkpoint_{epoch+1}.pt")
             wandb.save(f"./svetimdet/checkpoint_{epoch+1}.pt")
+            wandb.watch(model, log='all', log_freq=250)
 
         # print(f"Epoch {epoch+1}: mAP@0.5 = {results_map50['map']:.4f}, mAP@0.95 = {results_map95['map']:.4f}")
         # print(results_map50)
