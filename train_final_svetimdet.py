@@ -363,7 +363,7 @@ def objective():
             wandb.summary["predicted_images"] = wandb_pred_images
             wandb.summary["true_images"] = wandb_true_images
 
-        if (epoch+1) % 1 == 0:
+        if (epoch+1) % 1 == 100:
             wandb.unwatch()
             torch.save(model, f"./svetimdet/checkpoint_{epoch+1}.pt")
             wandb.save(f"./svetimdet/checkpoint_{epoch+1}.pt")
