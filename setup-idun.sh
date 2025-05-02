@@ -3,7 +3,7 @@ DATASET_PATH="/cluster/projects/vc/data/ad/open/Poles"
 echo "Dataset path: $DATASET_PATH"
 
 # Define destination directories
-DEST_DIR="/cluster/work/sverrnys/computer-vision/data"
+DEST_DIR="/cluster/work/$USER/computer-vision/data"
 
 COMBINED_DIR="$DEST_DIR/combined"
 
@@ -26,3 +26,18 @@ cp -r "$DEST_DIR/lidar/." "$COMBINED_DIR"
 cp -r "$DEST_DIR/rgb/." "$COMBINED_DIR"
 
 echo "Data configuration completed successfully."
+
+# Setup environment
+module purge
+module load Python/3.10.8-GCCcore-12.2.0
+module load CUDA/12.6.0
+
+python -m venv .venv
+
+source .venv/bin/activate
+pip install -r requirements.txt
+
+deactivate
+
+module purge
+echo "Done setting up environment"

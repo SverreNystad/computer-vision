@@ -3,20 +3,25 @@ import getpass
 
 USER_NAME = getpass.getuser()
 
-os.environ["WANDB_DIR"] = f"/work/{USER_NAME}/"
-os.environ["WANDB_CACHE_DIR"] = f"/work/{USER_NAME}/.cache/"
-os.environ["WANDB_CONFIG_DIR"] = f"/work/{USER_NAME}/.config/wandb"
-os.environ["WANDB_DATA_DIR"] = f"/work/{USER_NAME}/.cache/wandb-data/"
-os.environ["WANDB_ARTIFACT_DIR"] = f"/work/{USER_NAME}/artifacts"
+from dotenv import load_dotenv
+load_dotenv()
+
+
+DEVICE_PATH = os.getenv("DEVICE_PATH") or "/work"
+os.environ["WANDB_DIR"] = f"{DEVICE_PATH}/{USER_NAME}/"
+os.environ["WANDB_CACHE_DIR"] = f"{DEVICE_PATH}/{USER_NAME}/.cache/"
+os.environ["WANDB_CONFIG_DIR"] = f"{DEVICE_PATH}/{USER_NAME}/.config/wandb"
+os.environ["WANDB_DATA_DIR"] = f"{DEVICE_PATH}/{USER_NAME}/.cache/wandb-data/"
+os.environ["WANDB_ARTIFACT_DIR"] = f"{DEVICE_PATH}/{USER_NAME}/artifacts"
 
 if not os.path.exists(os.getenv("WANDB_CONFIG_DIR")):
     os.makedirs(os.getenv("WANDB_CONFIG_DIR"))
+
 
 import logging
 import sys
 import optuna
 from optuna.study import StudyDirection
-from optuna_dashboard import run_server
 from ultralytics import YOLO
 from codecarbon import track_emissions, OfflineEmissionsTracker
 import wandb
@@ -32,41 +37,28 @@ print(f"WANDB_API_KEY: {WANDB_API_KEY}")
 wandb.login(key=WANDB_API_KEY)
 
 def objective(trial: optuna.Trial):
+    yolo_model_types = ["yolo11s.yaml", "yolo11n.yaml"]
 
-    # From the YOLO default search space
-    hsv_h = trial.suggest_float("hsv_h", 0.015, 0.03)
-    hsv_s = trial.suggest_float("hsv_s", 0.5, 0.7)
-    hsv_v = trial.suggest_float("hsv_v", 0.3, 0.5)
-    degrees = trial.suggest_float("degrees", 5.0, 15.0)
-    translate = trial.suggest_float("translate", 0.0, 0.2)
-    scale = trial.suggest_float("scale", 0.3, 0.6)
-    shear = trial.suggest_float("shear", 0.0, 5.0)
-    perspective = trial.suggest_float("perspective", 0.0, 0.001)
-    fliplr = 0.5
-    mosaic = trial.suggest_float("mosaic", 0.0, 1.0)
-    mixup = trial.suggest_float("mixup", 0.0, 0.2)
-    copy_paste = trial.suggest_float("copy_paste", 0.0, 1.0)
-
+    # Basic parameters
+    epochs = trial.suggest_int("epochs", 200, 3000)
+    imgsz = trial.suggest_int("imgsz", 640, 1344)
+    dropout = trial.suggest_float("dropout", 0.0, 0.5)
+    model_type = trial.suggest_categorical("model_type", choices=yolo_model_types)
     # Initialize model
-    model = YOLO("yolo11s.yaml")
+    model = YOLO(model_type)
 
     # Train model with the sampled hyperparameters
-    model.train(
-        data=f"/work/{USER_NAME}/computer-vision/data/data-rgb.yaml",
-        project="cv-rgb-small-resize",
-        epochs=70,
-        hsv_h=hsv_h,
-        hsv_s=hsv_s,
-        hsv_v=hsv_v,
-        degrees=degrees,
-        translate=translate,
-        scale=scale,
-        shear=shear,
-        perspective=perspective,
-        fliplr=fliplr,
-        mosaic=mosaic,
-        mixup=mixup,
-        imgsz=1920,
+    # Run hyperparameter tuning (genetic algorithm) for augmented YOLO training
+    results = model.train(
+        data=f"{DEVICE_PATH}/{USER_NAME}/computer-vision/data/data-combined.yaml",
+        epochs=epochs,  # number of training epochs per trial
+        project="cv-combined-albuations",
+        imgsz=imgsz,
+        patience=200,
+        dropout=dropout,
+        mosaic=0,
+        lr0=0.0015,
+        optimizer="auto",  # optimizer to use during tuning
     )
 
     # Validate and retrieve metrics
@@ -111,6 +103,6 @@ def main(study_name: str):
         emmisions = tracker.stop()
 
 if __name__ == "__main__":
-   study_name = "rgb_yolo_epochs"
+   study_name = "lidar_yolo_epochs"
    main(study_name)
    # run_server(study_name)

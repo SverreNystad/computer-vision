@@ -11,7 +11,6 @@ from torchvision.transforms import v2
 import torchvision.utils as tu
 from PIL import Image
 from tqdm import tqdm
-from optuna.integration.wandb import WeightsAndBiasesCallback
 from codecarbon import track_emissions, OfflineEmissionsTracker
 from dotenv import load_dotenv
 from torchmetrics.detection.mean_ap import MeanAveragePrecision
@@ -27,7 +26,7 @@ import itertools, json, tempfile
 import numpy as np
 
 load_dotenv()
-STUDY_NAME = "cv-svetimdet-hyperparameter"
+STUDY_NAME = "cv-svetimdet-final"
 
 # Setup environment and wandb directories
 USER_NAME = getpass.getuser()
@@ -170,28 +169,24 @@ def _batch_to_coco_dict(all_targets, all_preds, start_img_id=0):
     return coco_gt, coco_dt, img_id
 
 
-wandb_kwargs = {"entity": "sverrenystad-ntnu", "project": STUDY_NAME}
-wandb_callback = WeightsAndBiasesCallback(wandb_kwargs=wandb_kwargs, as_multirun=True)
-
-@wandb_callback.track_in_wandb()
-def objective(trail: optuna.Trial):
+def objective():
     should_save_images = False 
 
-    num_epochs = 200#trail.suggest_int("epochs", 1, 6000)
-    learning_rate = trail.suggest_float("lr", 0.0001, 0.001, log=True)
-    weight_decay = trail.suggest_float("weight_decay", 0.0001, 0.001)
-    brightness = trail.suggest_float("brightness", 0.3, 0.5)
-    hue = trail.suggest_float("hue", 0.015, 0.03)
-    saturation = trail.suggest_float("saturation", 0.5, 0.7)
-    contrast = trail.suggest_float("contrast", 0.2, 0.8)
-    rotation = trail.suggest_float("rotation", 5.0, 15.0)
-    translate_x = trail.suggest_float("translate_x", 0.1, 0.2)
-    translate_y = trail.suggest_float("translate_y", 0.1, 0.2)
-    scale = trail.suggest_float("scale", 0.3, 0.6)
-    shear = trail.suggest_float("shear", 0.0, 5.0)
-    rpn_nms_thresh = trail.suggest_float("rpn_nms_thresh", 0.2, 0.8)
-    box_score_thresh = trail.suggest_float("box_score_thresh", 0.01, 0.1)
-    box_nms_thresh = trail.suggest_float("box_nms_thresh", 0.1, 0.5)
+    num_epochs = 3000#trail.suggest_int("epochs", 1, 6000)
+    learning_rate = 0.0003165726794125838 #trail.suggest_float("lr", 0.0001, 0.001, log=True)
+    weight_decay = 0.0002177526195396878 #trail.suggest_float("weight_decay", 0.0001, 0.001)
+    brightness = 0.40839081864518234 #trail.suggest_float("brightness", 0.3, 0.5)
+    hue = 0.198843580898354 #trail.suggest_float("hue", 0.015, 0.03)
+    saturation = 0.1253277211424748 #trail.suggest_float("saturation", 0.5, 0.7)
+    contrast = 0.5578118017400387 # trail.suggest_float("contrast", 0.2, 0.8)
+    rotation = 15.676048399226977 #trail.suggest_float("rotation", 5.0, 15.0)
+    translate_x = 0.131177385047551 #trail.suggest_float("translate_x", 0.1, 0.2)
+    translate_y = 0.1626464605840239 #trail.suggest_float("translate_y", 0.1, 0.2)
+    scale = 0.09954014685699958 #trail.suggest_float("scale", 0.3, 0.6)
+    shear = 4.453524479711405 #trail.suggest_float("shear", 0.0, 5.0)
+    rpn_nms_thresh = 0.6869658344602446 #trail.suggest_float("rpn_nms_thresh", 0.2, 0.8)
+    box_score_thresh = 0.06894281858740203 #trail.suggest_float("box_score_thresh", 0.01, 0.1)
+    box_nms_thresh = 0.25876630031432224 #trail.suggest_float("box_nms_thresh", 0.1, 0.5)
 
     wandb.log({
         "parameters/num_epochs": num_epochs,
@@ -208,8 +203,8 @@ def objective(trail: optuna.Trial):
         "parameters/shear": shear,
     })
 
-    width = 4096
-    height = 512
+    width = 1024
+    height = 1024
     transform = A.Compose([
         A.Resize(width, height),
         A.HorizontalFlip(p=0.5),
@@ -368,6 +363,13 @@ def objective(trail: optuna.Trial):
             wandb.summary["predicted_images"] = wandb_pred_images
             wandb.summary["true_images"] = wandb_true_images
 
+        if (epoch+1) % 100 == 0:
+            print("Saving model")
+            wandb.unwatch()
+            torch.save(model, f"./{STUDY_NAME}/checkpoint_{epoch+1}.pt")
+            wandb.save(f"./{STUDY_NAME}/checkpoint_{epoch+1}.pt")
+            wandb.watch(model, log='all', log_freq=250)
+
         # print(f"Epoch {epoch+1}: mAP@0.5 = {results_map50['map']:.4f}, mAP@0.95 = {results_map95['map']:.4f}")
         # print(results_map50)
         # Log epoch metrics to WANDB.
@@ -388,33 +390,15 @@ def objective(trail: optuna.Trial):
             best_val_loss = avg_val_loss
         print(f"Epoch {epoch + 1}/{num_epochs}: Train {avg_train_loss:.4f}, Val {avg_val_loss:.4f}, mAP@0.5 = {results_map50['map']:.4f}, mAP@0.95 = {results_map95['map']:.4f}")
 
+    torch.save(model, "./{STUDY_NAME}/svetim_det.pt")
 
     return final_map95, final_map50
 
 
-#@track_emissions(offline=True, country_iso_code="NOR")
-def main(study_name: str):
-    tracker = OfflineEmissionsTracker(country_iso_code="NOR")
-    try:
-        #wandb.init(entity="sverrenystad-ntnu", project=STUDY_NAME, reinit=True)
-        optuna.logging.get_logger("optuna").addHandler(logging.StreamHandler(sys.stdout))
-        MYSQL_USER = os.getenv("MYSQL_USER")
-        MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD")
-        storage_name = f"mysql+pymysql://{MYSQL_USER}:{MYSQL_PASSWORD}@mysql.stud.ntnu.no/timma_tdt4265_db"
-        study = optuna.create_study(
-            study_name=study_name,
-            storage=storage_name,
-            load_if_exists=True,
-            directions=[StudyDirection.MAXIMIZE, StudyDirection.MAXIMIZE],
-        )
-        for _ in range(100):
-            study.optimize(objective, n_trials=10, callbacks=[wandb_callback])
-            tracker.flush()
-            wandb.finish()
-        print("Best trial:", study.best_trial)
-    finally:
-        tracker.stop()
-
-
 if __name__ == "__main__":
-    main(STUDY_NAME)
+    # main(STUDY_NAME)
+        #wandb.init(entity="sverrenystad-ntnu", project=STUDY_NAME, reinit=True)
+
+    wandb.init(entity="sverrenystad-ntnu", project=STUDY_NAME, reinit = True)
+    objective()
+    wandb.finish()
