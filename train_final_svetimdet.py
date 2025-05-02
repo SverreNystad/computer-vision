@@ -26,7 +26,7 @@ import itertools, json, tempfile
 import numpy as np
 
 load_dotenv()
-STUDY_NAME = "cv-svetimdet-final-combined"
+STUDY_NAME = "cv-svetimdet-final"
 
 # Setup environment and wandb directories
 USER_NAME = getpass.getuser()
@@ -173,20 +173,20 @@ def objective():
     should_save_images = False 
 
     num_epochs = 3000#trail.suggest_int("epochs", 1, 6000)
-    learning_rate = 0.00028952737806517463#trail.suggest_float("lr", 0.0001, 0.001, log=True)
+    learning_rate = 0.0003165726794125838 #trail.suggest_float("lr", 0.0001, 0.001, log=True)
     weight_decay = 0.0002177526195396878 #trail.suggest_float("weight_decay", 0.0001, 0.001)
-    brightness = 0.3240585762419205 #trail.suggest_float("brightness", 0.3, 0.5)
-    hue = 0.022214255096094412 #trail.suggest_float("hue", 0.015, 0.03)
-    saturation = 0.6961810932866406 #trail.suggest_float("saturation", 0.5, 0.7)
-    contrast = 0.265050967710775 # trail.suggest_float("contrast", 0.2, 0.8)
-    rotation = 5.303318579701211 #trail.suggest_float("rotation", 5.0, 15.0)
-    translate_x = 5.303318579701211 #trail.suggest_float("translate_x", 0.1, 0.2)
-    translate_y = 0.1388562791962336 #trail.suggest_float("translate_y", 0.1, 0.2)
-    scale = 0.3012200848942899 #trail.suggest_float("scale", 0.3, 0.6)
-    shear = 0.2834993774711181 #trail.suggest_float("shear", 0.0, 5.0)
-    rpn_nms_thresh = 0.7650615190146401 #trail.suggest_float("rpn_nms_thresh", 0.2, 0.8)
-    box_score_thresh = 0.035055314245514946 #trail.suggest_float("box_score_thresh", 0.01, 0.1)
-    box_nms_thresh = 0.46660279967423135 #trail.suggest_float("box_nms_thresh", 0.1, 0.5)
+    brightness = 0.40839081864518234 #trail.suggest_float("brightness", 0.3, 0.5)
+    hue = 0.198843580898354 #trail.suggest_float("hue", 0.015, 0.03)
+    saturation = 0.1253277211424748 #trail.suggest_float("saturation", 0.5, 0.7)
+    contrast = 0.5578118017400387 # trail.suggest_float("contrast", 0.2, 0.8)
+    rotation = 15.676048399226977 #trail.suggest_float("rotation", 5.0, 15.0)
+    translate_x = 0.131177385047551 #trail.suggest_float("translate_x", 0.1, 0.2)
+    translate_y = 0.1626464605840239 #trail.suggest_float("translate_y", 0.1, 0.2)
+    scale = 0.09954014685699958 #trail.suggest_float("scale", 0.3, 0.6)
+    shear = 4.453524479711405 #trail.suggest_float("shear", 0.0, 5.0)
+    rpn_nms_thresh = 0.6869658344602446 #trail.suggest_float("rpn_nms_thresh", 0.2, 0.8)
+    box_score_thresh = 0.06894281858740203 #trail.suggest_float("box_score_thresh", 0.01, 0.1)
+    box_nms_thresh = 0.25876630031432224 #trail.suggest_float("box_nms_thresh", 0.1, 0.5)
 
     wandb.log({
         "parameters/num_epochs": num_epochs,
@@ -203,8 +203,8 @@ def objective():
         "parameters/shear": shear,
     })
 
-    width = 4096
-    height = 512
+    width = 1024
+    height = 1024
     transform = A.Compose([
         A.Resize(width, height),
         A.HorizontalFlip(p=0.5),
@@ -214,10 +214,10 @@ def objective():
         A.Perspective(p=0.0001),
     ], bbox_params=A.BboxParams(format='yolo', label_fields=['labels']))
 
-    train_img_dir = f"{DEVICE_PATH}/{USER_NAME}/computer-vision/data/combined/images/train"
-    train_label_dir = f"{DEVICE_PATH}/{USER_NAME}/computer-vision/data/combined/labels/train"
-    val_img_dir = f"{DEVICE_PATH}/{USER_NAME}/computer-vision/data/combined/images/valid"
-    val_label_dir = f"{DEVICE_PATH}/{USER_NAME}/computer-vision/data/combined/labels/valid"
+    train_img_dir = f"{DEVICE_PATH}/{USER_NAME}/computer-vision/data/rgb/images/train"
+    train_label_dir = f"{DEVICE_PATH}/{USER_NAME}/computer-vision/data/rgb/labels/train"
+    val_img_dir = f"{DEVICE_PATH}/{USER_NAME}/computer-vision/data/rgb/images/valid"
+    val_label_dir = f"{DEVICE_PATH}/{USER_NAME}/computer-vision/data/rgb/labels/valid"
 
     train_dataset = OurDataset(train_img_dir, train_label_dir, transform=transform)
     val_dataset = OurDataset(val_img_dir, val_label_dir, transform=transform)
@@ -363,7 +363,8 @@ def objective():
             wandb.summary["predicted_images"] = wandb_pred_images
             wandb.summary["true_images"] = wandb_true_images
 
-        if (epoch+1) % 1 == 100:
+        if (epoch+1) % 100 == 0:
+            print("Saving model")
             wandb.unwatch()
             torch.save(model, f"./{STUDY_NAME}/checkpoint_{epoch+1}.pt")
             wandb.save(f"./{STUDY_NAME}/checkpoint_{epoch+1}.pt")
